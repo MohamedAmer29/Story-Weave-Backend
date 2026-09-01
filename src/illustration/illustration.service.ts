@@ -333,6 +333,81 @@ export class IllustrationService {
     };
   }
 
+  async regenerateCover(
+    userId: string,
+    storyId: string,
+  ): Promise<{ success: boolean; message: string; storyId: string }> {
+    this.logger.log(`Regenerating cover for story: ${storyId}`);
+
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+    });
+
+    if (!story) {
+      throw new NotFoundException('Story not found');
+    }
+
+    if (story.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    this.validateStoryReady(story);
+
+    if (this.isRequeueableBlocked(story.coverImageStatus)) {
+      throw new BadRequestException(
+        'Cover illustration is already being processed',
+      );
+    }
+
+    const previousStatus = story.coverImageStatus;
+
+    try {
+      const coverPrompt = this.scenePromptService.buildCoverPrompt(story);
+      story.coverImagePrompt = coverPrompt;
+      story.coverImageStatus = IllustrationPageStatus.QUEUED;
+      story.coverImageError = null;
+      await this.storyRepository.save(story);
+
+      const regenAttemptId = randomUUID();
+      await this.addCoverJob({
+        storyId,
+        userId,
+        prompt: coverPrompt,
+        attemptId: regenAttemptId,
+      });
+
+      await this.resetGenerationNotified(story);
+      const pages = await this.storyPageRepository.find({
+        where: { storyId },
+        order: { pageNumber: 'ASC' },
+      });
+      const progress = this.illustrationStatusService.computeStatus(pages);
+      await this.storyProgressService.emitProgress({
+        storyId,
+        userId,
+        status: progress.status,
+        progress,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to requeue cover for story ${storyId}: ${
+          (error as Error)?.message ?? 'Unknown error'
+        }`,
+      );
+      story.coverImageStatus = previousStatus;
+      await this.storyRepository.save(story).catch(() => undefined);
+      throw new BadRequestException(
+        'Failed to queue cover regeneration. Please try again.',
+      );
+    }
+
+    return {
+      success: true,
+      message: 'Cover regeneration queued',
+      storyId,
+    };
+  }
+
   private async addJob(data: IllustrationJobData): Promise<void> {
     const jobId = `${ILLUSTRATION_JOB_PREFIX}-${data.storyPageId}${
       data.attemptId ? `-${data.attemptId}` : ''

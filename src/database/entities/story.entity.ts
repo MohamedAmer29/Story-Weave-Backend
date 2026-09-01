@@ -16,8 +16,10 @@ import { StoryType } from '../../common/enums/story-type.enum';
 import { StoryLanguage } from '../../common/enums/story-language.enum';
 import { StoryIllustrationStatus } from '../../illustration/enums/story-illustration-status.enum';
 import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
+import { GenerationStatus } from '../../common/enums/generation-status.enum';
 import { User } from './user.entity';
 import { StoryPage } from './story-page.entity';
+import { StoryShare } from './story-share.entity';
 
 @Entity('stories')
 @Index('IDX_stories_user_visibility', ['userId', 'visibility'])
@@ -75,6 +77,16 @@ export class Story {
 
   @Column({
     type: 'enum',
+    enum: GenerationStatus,
+    nullable: true,
+  })
+  generationStatus?: GenerationStatus;
+
+  @Column({ nullable: true })
+  coverImageUrl?: string;
+
+  @Column({
+    type: 'enum',
     enum: StoryLanguage,
     nullable: true,
   })
@@ -82,6 +94,15 @@ export class Story {
 
   @Column({ nullable: true, type: 'text' })
   errorMessage: string;
+
+  @Column({ nullable: true, type: 'int', default: 0 })
+  totalImages?: number;
+
+  @Column({ nullable: true, type: 'int', default: 0 })
+  completedImages?: number;
+
+  @Column({ nullable: true, type: 'int', default: 0 })
+  failedImages?: number;
 
   @Column({
     type: 'enum',
@@ -112,8 +133,8 @@ export class Story {
   @OneToMany(() => StoryPage, (page) => page.story, { cascade: true })
   pages: StoryPage[];
 
-  @Column({ nullable: true, type: 'text' })
-  coverImageUrl: string | null;
+  @OneToMany(() => StoryShare, (share) => share.story)
+  shares: StoryShare[];
 
   @Column({ nullable: true, type: 'text' })
   coverImagePublicId: string | null;

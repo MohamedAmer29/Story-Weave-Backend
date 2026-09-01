@@ -34,6 +34,7 @@ import {
 } from './dto/story-response.dto';
 import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
 import { StoryType } from '../../common/enums/story-type.enum';
+import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
@@ -62,7 +63,9 @@ export class StoryController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all stories for current user' })
+  @ApiOperation({
+    summary: 'Get all stories for current user (owned + public + shared)',
+  })
   @ApiResponse({ status: 200, type: PaginatedStoriesResponseDto })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(
@@ -70,6 +73,28 @@ export class StoryController {
     @Query() queryDto: StoryQueryDto,
   ): Promise<PaginatedStoriesResponseDto> {
     return this.storyService.findAll(userId, queryDto);
+  }
+
+  @Get('my')
+  @ApiOperation({ summary: 'Get stories owned by current user' })
+  @ApiResponse({ status: 200, type: PaginatedStoriesResponseDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async findMyStories(
+    @CurrentUser('id') userId: string,
+    @Query() queryDto: StoryQueryDto,
+  ): Promise<PaginatedStoriesResponseDto> {
+    return this.storyService.findMyStories(userId, queryDto);
+  }
+
+  @Get('shared')
+  @ApiOperation({ summary: 'Get stories shared with current user' })
+  @ApiResponse({ status: 200, type: PaginatedStoriesResponseDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async findSharedStories(
+    @CurrentUser('id') userId: string,
+    @Query() queryDto: StoryQueryDto,
+  ): Promise<PaginatedStoriesResponseDto> {
+    return this.storyService.findSharedStories(userId, queryDto);
   }
 
   @Public()
@@ -143,6 +168,61 @@ export class StoryController {
     @Param('id') id: string,
   ): Promise<void> {
     return this.storyService.remove(userId, id);
+  }
+
+  @Patch(':id/visibility')
+  @ApiOperation({ summary: 'Update story visibility' })
+  @ApiResponse({ status: 200, type: StoryResponseDto })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async updateVisibility(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() body: { visibility: StoryVisibility },
+  ): Promise<StoryResponseDto> {
+    return this.storyService.updateVisibility(userId, id, body.visibility);
+  }
+
+  @Post(':id/share')
+  @ApiOperation({ summary: 'Share story with a user' })
+  @ApiResponse({ status: 200, description: 'Share created' })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async shareStory(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() body: { userId: string },
+  ) {
+    return this.storyService.shareStory(userId, id, body.userId);
+  }
+
+  @Delete(':id/share/:targetUserId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Remove user access from story' })
+  @ApiResponse({ status: 204, description: 'No Content' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async removeShare(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Param('targetUserId') targetUserId: string,
+  ): Promise<void> {
+    return this.storyService.removeShare(userId, id, targetUserId);
+  }
+
+  @Get(':id/shares')
+  @ApiOperation({ summary: 'List users with access to story' })
+  @ApiResponse({ status: 200, description: 'List of shared users' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async listShares(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.storyService.listShares(userId, id);
   }
 
   @Post('upload-pdf')

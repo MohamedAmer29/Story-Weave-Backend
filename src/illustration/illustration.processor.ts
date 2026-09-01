@@ -22,9 +22,29 @@ import { IllustrationStatusResult } from './services/illustration-status.service
 import { IllustrationJobData } from './illustration.service';
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { PublicCacheService } from '../common/services/public-cache.service';
+import { PromptValidationService } from './services/prompt-validation.service';
 import { Redis } from 'ioredis';
 
 const CLOUDFLARE_MODEL_KEY = '@cf/black-forest-labs/flux-1-schnell';
+
+// Non-retryable error patterns (message-based)
+const NON_RETRYABLE_ERROR_PATTERNS = [
+  'Invalid prompt',
+  'prompt too long',
+  'invalid API credentials',
+  'invalid request parameters',
+  'authentication failed',
+  'unauthorized',
+  'forbidden',
+  'not found',
+  'Invalid Cloudflare',
+];
+
+// Non-retryable HTTP status codes
+const NON_RETRYABLE_STATUS_CODES = [400, 401, 403, 404];
+
+// Retryable HTTP status codes (with backoff)
+const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504];
 
 @Injectable()
 export class IllustrationProcessor
@@ -46,6 +66,7 @@ export class IllustrationProcessor
     private readonly illustrationStatusService: IllustrationStatusService,
     private readonly storyProgressService: StoryProgressService,
     private readonly publicCacheService: PublicCacheService,
+    private readonly promptValidationService: PromptValidationService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -79,18 +100,67 @@ export class IllustrationProcessor
     }
   }
 
+  private isRetryableError(error: unknown): boolean {
+    const errorMessage =
+      error instanceof Error
+        ? error.message.toLowerCase()
+        : typeof error === 'string'
+          ? error.toLowerCase()
+          : '';
+
+    // Check message-based patterns first
+    const isMessageRetryable = !NON_RETRYABLE_ERROR_PATTERNS.some((pattern) =>
+      errorMessage.includes(pattern.toLowerCase()),
+    );
+
+    // Check HTTP status codes if available in error
+    let isStatusCodeRetryable = true;
+    if (error instanceof Error && 'response' in error) {
+      const response = (error as any).response;
+      if (response && response.status) {
+        const statusCode = response.status;
+
+        if (NON_RETRYABLE_STATUS_CODES.includes(statusCode)) {
+          this.logger.warn(
+            `[IllustrationProcessor] HTTP status ${statusCode} is non-retryable`,
+          );
+          isStatusCodeRetryable = false;
+        } else if (RETRYABLE_STATUS_CODES.includes(statusCode)) {
+          this.logger.log(
+            `[IllustrationProcessor] HTTP status ${statusCode} is retryable`,
+          );
+          isStatusCodeRetryable = true;
+        }
+      }
+    }
+
+    // Error is retryable only if both message and status code allow it
+    return isMessageRetryable && isStatusCodeRetryable;
+  }
+
   async processJob(job: Job<IllustrationJobData>): Promise<void> {
     const { storyPageId, prompt, userId } = job.data as any;
+    const jobId = job.id;
+
+    this.logger.log(
+      `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} userId=${userId} attempt=${job.attemptsMade + 1}/${job.opts.attempts || 3}`,
+    );
 
     // Handle cover jobs
     if (job.name === 'illustrate-cover') {
       const { storyId } = job.data as any;
 
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyId=${storyId} type=COVER userId=${userId} attempt=${job.attemptsMade + 1}/${job.opts.attempts || 3}`,
+      );
+
       const story = await this.storyRepository.findOne({
         where: { id: storyId },
       });
       if (!story) {
-        this.logger.warn(`Cover job for missing story ${storyId} ignored`);
+        this.logger.warn(
+          `[IllustrationJob] jobId=${jobId} storyId=${storyId} Cover job for missing story ignored`,
+        );
         return;
       }
 
@@ -103,7 +173,7 @@ export class IllustrationProcessor
 
         if (!allowed) {
           this.logger.warn(
-            `AI daily limit reached. Not calling Cloudflare for cover ${storyId}`,
+            `[IllustrationJob] jobId=${jobId} storyId=${storyId} AI daily limit reached. Not calling Cloudflare for cover`,
           );
           story.coverImageStatus = IllustrationPageStatus.FAILED;
           story.coverImageError = 'AI_DAILY_LIMIT_REACHED';
@@ -116,11 +186,27 @@ export class IllustrationProcessor
         }
 
         const promptToUse = prompt || story.coverImagePrompt || '';
+
+        try {
+          const validatedPrompt =
+            this.promptValidationService.validateImagePrompt(promptToUse);
+        } catch (error) {
+          this.logger.error(
+            `[IllustrationJob] jobId=${jobId} storyId=${storyId} Prompt validation failed: ${error}`,
+          );
+          story.coverImageStatus = IllustrationPageStatus.FAILED;
+          story.coverImageError = 'Invalid prompt';
+          await this.storyRepository.save(story);
+          return;
+        }
+
         if (
           typeof promptToUse !== 'string' ||
           promptToUse.trim().length === 0
         ) {
-          this.logger.error(`Invalid cover prompt for story ${storyId}`);
+          this.logger.error(
+            `[IllustrationJob] jobId=${jobId} storyId=${storyId} Invalid cover prompt`,
+          );
           story.coverImageStatus = IllustrationPageStatus.FAILED;
           story.coverImageError = 'Invalid prompt';
           await this.storyRepository.save(story);
@@ -130,11 +216,17 @@ export class IllustrationProcessor
         story.coverImageStatus = IllustrationPageStatus.GENERATING;
         await this.storyRepository.save(story);
 
+        this.logger.log(
+          `[IllustrationJob] jobId=${jobId} storyId=${storyId} status=GENERATING Calling Cloudflare`,
+        );
         const result = await this.cloudflareProvider.generateImage(promptToUse);
 
         story.coverImageStatus = IllustrationPageStatus.UPLOADING;
         await this.storyRepository.save(story);
 
+        this.logger.log(
+          `[IllustrationJob] jobId=${jobId} storyId=${storyId} status=UPLOADING Uploading to Cloudinary`,
+        );
         const upload = await this.cloudinaryService.uploadImage(result.buffer, {
           folder: `storyforge/stories/${story.id}/cover`,
           publicId: `${story.id}-cover`,
@@ -147,16 +239,27 @@ export class IllustrationProcessor
         story.coverImageGeneratedAt = new Date();
         await this.storyRepository.save(story);
 
-        this.logger.log(`Cover generation completed for story: ${storyId}`);
+        this.logger.log(
+          `[IllustrationJob] jobId=${jobId} storyId=${storyId} status=COMPLETED Cover generation completed`,
+        );
         // notify page completed for cover? Emit a dedicated notification if needed
         await this.publicCacheService.bust();
       } catch (error: any) {
         this.logger.error(
-          `Cover job for story ${storyId} failed: ${error?.message}`,
+          `[IllustrationJob] jobId=${jobId} storyId=${storyId} Cover job failed: ${error?.message}`,
         );
         story.coverImageStatus = IllustrationPageStatus.FAILED;
         story.coverImageError = (error as Error)?.message ?? 'Unknown error';
         await this.storyRepository.save(story).catch(() => undefined);
+
+        // Don't retry non-retryable errors
+        if (!this.isRetryableError(error)) {
+          this.logger.log(
+            `[IllustrationJob] jobId=${jobId} storyId=${storyId} Failed with non-retryable error, not retrying`,
+          );
+          throw new Error('Non-retryable error');
+        }
+
         throw error;
       }
 
@@ -164,7 +267,7 @@ export class IllustrationProcessor
     }
 
     this.logger.log(
-      `Illustration job started for page: ${storyPageId} (user: ${userId})`,
+      `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} type=STORY_PAGE userId=${userId} attempt=${job.attemptsMade + 1}/${job.opts.attempts || 3}`,
     );
 
     const page = await this.storyPageRepository.findOne({
@@ -175,7 +278,7 @@ export class IllustrationProcessor
     // Page no longer exists: nothing to do, avoid infinite retries.
     if (!page) {
       this.logger.warn(
-        `Illustration job for missing page ${storyPageId} ignored (INVALID_STORY_PAGE)`,
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Illustration job for missing page ignored (INVALID_STORY_PAGE)`,
       );
       return;
     }
@@ -183,7 +286,7 @@ export class IllustrationProcessor
     const story = page.story;
     if (!story) {
       this.logger.warn(
-        `Illustration job for page ${storyPageId} has no story (INVALID_STORY_PAGE)`,
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Illustration job for page has no story (INVALID_STORY_PAGE)`,
       );
       await this.markPageFailed(page, 'Story not found');
       return;
@@ -191,6 +294,9 @@ export class IllustrationProcessor
 
     try {
       await this.setPageStatus(page, IllustrationPageStatus.GENERATING);
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} status=GENERATING`,
+      );
 
       // AI usage protection: authoritative application-level safety mechanism.
       const { allowed } = await this.usageService.canMakeRequest(
@@ -200,7 +306,7 @@ export class IllustrationProcessor
 
       if (!allowed) {
         this.logger.warn(
-          `AI daily limit reached. Not calling Cloudflare for page ${storyPageId}`,
+          `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} AI daily limit reached. Not calling Cloudflare`,
         );
         await this.markPageFailed(page, 'AI_DAILY_LIMIT_REACHED');
         await this.storyProgressService.notifyDailyLimitReached(
@@ -213,11 +319,27 @@ export class IllustrationProcessor
         return;
       }
 
-      this.logger.log(`FLUX request started for page: ${storyPageId}`);
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Calling Cloudflare promptLength=${prompt.length}`,
+      );
+
+      try {
+        const validatedPrompt =
+          this.promptValidationService.validateImagePrompt(prompt);
+      } catch (error) {
+        this.logger.error(
+          `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Prompt validation failed: ${error}`,
+        );
+        await this.markPageFailed(page, 'Invalid prompt');
+        const progress = await this.refreshStoryStatus(story);
+        await this.storyProgressService.onChangeStatus(story, progress.result);
+        await this.publicCacheService.bust();
+        return;
+      }
 
       if (typeof prompt !== 'string' || prompt.trim().length === 0) {
         this.logger.error(
-          `Invalid prompt for page ${storyPageId}; aborting Cloudflare request`,
+          `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Invalid prompt; aborting Cloudflare request`,
         );
         await this.markPageFailed(page, 'Invalid prompt');
         const progress = await this.refreshStoryStatus(story);
@@ -227,27 +349,34 @@ export class IllustrationProcessor
       }
 
       this.logger.debug(
-        `[CloudflareRequest] model=${CLOUDFLARE_MODEL_KEY} promptLength=${prompt.length}`,
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} model=${CLOUDFLARE_MODEL_KEY} promptLength=${prompt.length}`,
       );
 
       const result = await this.cloudflareProvider.generateImage(prompt);
 
       this.logger.log(
-        `FLUX request completed for page: ${storyPageId} (${result.buffer.length} bytes)`,
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Cloudflare request completed imageSize=${result.buffer.length} bytes`,
       );
 
       await this.setPageStatus(page, IllustrationPageStatus.UPLOADING);
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} status=UPLOADING Uploading to Cloudinary`,
+      );
 
       const oldPublicId = page.imagePublicId;
 
-      this.logger.log(`Cloudinary upload started for page: ${storyPageId}`);
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Cloudinary upload started`,
+      );
 
       const upload = await this.cloudinaryService.uploadImage(result.buffer, {
         folder: `storyforge/stories/${story.id}/pages`,
         publicId: page.id,
       });
 
-      this.logger.log(`Cloudinary upload completed for page: ${storyPageId}`);
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Cloudinary upload completed publicId=${upload.publicId}`,
+      );
 
       // Only remove the previous image after the replacement succeeded.
       if (oldPublicId && oldPublicId !== upload.publicId) {
@@ -261,7 +390,9 @@ export class IllustrationProcessor
       page.imageGeneratedAt = new Date();
       await this.storyPageRepository.save(page);
 
-      this.logger.log(`Illustration completed for page: ${storyPageId}`);
+      this.logger.log(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} status=COMPLETED pageNumber=${page.pageNumber}`,
+      );
 
       await this.storyProgressService.notifyPageCompleted(
         story.id,
@@ -274,15 +405,24 @@ export class IllustrationProcessor
       await this.storyProgressService.onChangeStatus(story, progress.result);
       await this.publicCacheService.bust();
     } catch (error: any) {
+      this.logger.error(
+        `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Error: ${error?.message}`,
+      );
       const isLastAttempt = job.attemptsMade + 1 >= (job.opts.attempts || 1);
 
-      if (isLastAttempt) {
+      if (isLastAttempt || !this.isRetryableError(error)) {
+        this.logger.log(
+          `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Marking as failed (attempt=${job.attemptsMade + 1}, retryable=${this.isRetryableError(error)})`,
+        );
         await this.markPageFailed(page, this.safeErrorMessage(error));
         const progress = await this.refreshStoryStatus(story);
         await this.storyProgressService.onChangeStatus(story, progress.result);
         await this.publicCacheService.bust();
       } else {
         // Transient failure: show QUEUED while a retry is scheduled.
+        this.logger.log(
+          `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Transient failure, retrying (attempt=${job.attemptsMade + 1})`,
+        );
         await this.setPageStatus(page, IllustrationPageStatus.QUEUED);
       }
 

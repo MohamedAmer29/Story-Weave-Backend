@@ -34,6 +34,8 @@ import { StoryAccessService } from './services/story-access.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { NotificationType } from '../../notifications/notification-type.enum';
 
 @Injectable()
 export class StoryService {
@@ -44,6 +46,8 @@ export class StoryService {
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
     private readonly storyPageRepository: Repository<StoryPage>,
+    @InjectRepository(StoryShare)
+    private readonly storyShareRepository: Repository<StoryShare>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectDataSource()
@@ -54,6 +58,7 @@ export class StoryService {
     private readonly illustrationStatusService: IllustrationStatusService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly publicCacheService: PublicCacheService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -123,6 +128,81 @@ export class StoryService {
 
     const queryBuilder = this.storyRepository
       .createQueryBuilder('story')
+      .leftJoinAndSelect('story.shares', 'share')
+      .where(
+        '(story.userId = :userId OR story.visibility = :public OR share.userId = :userId)',
+        { userId, public: StoryVisibility.PUBLIC },
+      );
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(story.title ILIKE :search OR story.description ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (status) {
+      queryBuilder.andWhere('story.status = :status', { status });
+    }
+
+    if (sourceType) {
+      queryBuilder.andWhere('story.sourceType = :sourceType', { sourceType });
+    }
+
+    if (visibility) {
+      queryBuilder.andWhere('story.visibility = :visibility', { visibility });
+    }
+
+    switch (sort) {
+      case 'oldest':
+        queryBuilder.orderBy('story.createdAt', 'ASC');
+        break;
+      case 'updated':
+        queryBuilder.orderBy('story.updatedAt', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('story.createdAt', 'DESC');
+        break;
+    }
+
+    const [stories, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .distinct(true)
+      .getManyAndCount();
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: stories.map((s) => this.toResponseDto(s)),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  async findMyStories(
+    userId: string,
+    queryDto: StoryQueryDto,
+  ): Promise<PaginatedStoriesResponseDto> {
+    this.logger.log(`Finding owned stories for user: ${userId}`);
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      sourceType,
+      visibility,
+      sort = 'latest',
+    } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.storyRepository
+      .createQueryBuilder('story')
       .where('story.userId = :userId', { userId });
 
     if (search) {
@@ -142,6 +222,73 @@ export class StoryService {
 
     if (visibility) {
       queryBuilder.andWhere('story.visibility = :visibility', { visibility });
+    }
+
+    switch (sort) {
+      case 'oldest':
+        queryBuilder.orderBy('story.createdAt', 'ASC');
+        break;
+      case 'updated':
+        queryBuilder.orderBy('story.updatedAt', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('story.createdAt', 'DESC');
+        break;
+    }
+
+    const [stories, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: stories.map((s) => this.toResponseDto(s)),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
+
+  async findSharedStories(
+    userId: string,
+    queryDto: StoryQueryDto,
+  ): Promise<PaginatedStoriesResponseDto> {
+    this.logger.log(`Finding shared stories for user: ${userId}`);
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      sourceType,
+      sort = 'latest',
+    } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.storyRepository
+      .createQueryBuilder('story')
+      .innerJoin('story.shares', 'share')
+      .where('share.userId = :userId', { userId })
+      .andWhere('story.userId != :userId', { userId }); // Exclude own stories
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(story.title ILIKE :search OR story.description ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (status) {
+      queryBuilder.andWhere('story.status = :status', { status });
+    }
+
+    if (sourceType) {
+      queryBuilder.andWhere('story.sourceType = :sourceType', { sourceType });
     }
 
     switch (sort) {
@@ -475,6 +622,178 @@ export class StoryService {
       errorMessage: story.errorMessage ?? undefined,
       createdAt: story.createdAt,
       updatedAt: story.updatedAt,
+    };
+  }
+
+  async updateVisibility(
+    userId: string,
+    storyId: string,
+    visibility: StoryVisibility,
+  ): Promise<StoryResponseDto> {
+    this.logger.log(
+      `Updating visibility for story: ${storyId} to: ${visibility}`,
+    );
+
+    const story = await this.storyAccessService.requireOwnership(
+      storyId,
+      userId,
+    );
+
+    story.visibility = visibility;
+    await this.storyRepository.save(story);
+
+    await this.publicCacheService.bust();
+
+    return this.toResponseDto(story);
+  }
+
+  async shareStory(
+    userId: string,
+    storyId: string,
+    targetUserId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    this.logger.log(`Sharing story: ${storyId} with user: ${targetUserId}`);
+
+    const story = await this.storyAccessService.requireOwnership(
+      storyId,
+      userId,
+    );
+
+    // Verify target user exists
+    const targetUser = await this.userRepository.findOne({
+      where: { id: targetUserId },
+    });
+    if (!targetUser) {
+      throw new NotFoundException('Target user not found');
+    }
+
+    // Prevent sharing with yourself
+    if (targetUserId === userId) {
+      throw new BadRequestException('Cannot share story with yourself');
+    }
+
+    // Check for existing share
+    const existingShare = await this.storyShareRepository.findOne({
+      where: { storyId, userId: targetUserId },
+    });
+    if (existingShare) {
+      throw new BadRequestException('Story already shared with this user');
+    }
+
+    // Create share
+    const share = this.storyShareRepository.create({
+      storyId,
+      userId: targetUserId,
+    });
+    await this.storyShareRepository.save(share);
+
+    // Create notification
+    const sharer = await this.userRepository.findOne({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        name: true,
+      },
+    });
+    const sharerName =
+      sharer?.name ||
+      `${sharer?.firstName} ${sharer?.lastName}`.trim() ||
+      'Someone';
+
+    await this.notificationsService.create(
+      targetUserId,
+      NotificationType.STORY_SHARED,
+      'Story shared with you',
+      `"${story.title}" has been shared with you by ${sharerName}.`,
+      { storyId, sharedBy: userId },
+    );
+
+    return {
+      success: true,
+      message: 'Story shared successfully',
+    };
+  }
+
+  async removeShare(
+    userId: string,
+    storyId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Removing share for story: ${storyId} from user: ${targetUserId}`,
+    );
+
+    const story = await this.storyAccessService.requireOwnership(
+      storyId,
+      userId,
+    );
+
+    // Prevent removing owner's own access
+    if (targetUserId === userId) {
+      throw new BadRequestException('Cannot remove your own access');
+    }
+
+    const share = await this.storyShareRepository.findOne({
+      where: { storyId, userId: targetUserId },
+    });
+    if (!share) {
+      throw new NotFoundException('Share not found');
+    }
+
+    await this.storyShareRepository.remove(share);
+
+    // Optionally notify the user that access was removed
+    await this.notificationsService.create(
+      targetUserId,
+      NotificationType.STORY_ACCESS_REMOVED,
+      'Story access removed',
+      `Your access to "${story.title}" has been removed by the owner.`,
+      { storyId },
+    );
+  }
+
+  async listShares(
+    userId: string,
+    storyId: string,
+  ): Promise<{
+    success: boolean;
+    data: Array<{
+      userId: string;
+      name: string;
+      email: string;
+      sharedAt: Date;
+    }>;
+  }> {
+    this.logger.log(`Listing shares for story: ${storyId}`);
+
+    const story = await this.storyAccessService.requireOwnership(
+      storyId,
+      userId,
+    );
+
+    const shares = await this.storyShareRepository.find({
+      where: { storyId },
+      relations: {
+        user: true,
+      },
+      order: { createdAt: 'ASC' },
+    });
+
+    const data = shares.map((share) => ({
+      userId: share.userId,
+      name:
+        share.user?.name ||
+        `${share.user?.firstName} ${share.user?.lastName}`.trim() ||
+        'Unknown',
+      email: share.user?.email || '',
+      sharedAt: share.createdAt,
+    }));
+
+    return {
+      success: true,
+      data,
     };
   }
 }

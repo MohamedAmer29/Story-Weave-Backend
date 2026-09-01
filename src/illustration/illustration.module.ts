@@ -17,6 +17,7 @@ import { IllustrationProcessor } from './illustration.processor';
 import { ScenePromptService } from './services/scene-prompt.service';
 import { GenreVisualStyleService } from './services/genre-visual-style.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
+import { PromptValidationService } from './services/prompt-validation.service';
 
 @Global()
 @Module({
@@ -35,10 +36,28 @@ import { IllustrationStatusService } from './services/illustration-status.servic
     ScenePromptService,
     GenreVisualStyleService,
     IllustrationStatusService,
+    PromptValidationService,
     {
       provide: ILLUSTRATION_QUEUE,
       useFactory: (connection: Redis): Queue => {
-        return new Queue(ILLUSTRATION_QUEUE, { connection });
+        return new Queue(ILLUSTRATION_QUEUE, {
+          connection,
+          defaultJobOptions: {
+            removeOnComplete: {
+              count: 1000,
+              age: 86400, // 24 hours
+            },
+            removeOnFail: {
+              count: 5000,
+              age: 604800, // 7 days
+            },
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 2000,
+            },
+          },
+        });
       },
       inject: [BULLMQ_CONNECTION],
     },

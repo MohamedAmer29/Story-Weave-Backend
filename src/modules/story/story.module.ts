@@ -12,6 +12,7 @@ import { StoryParserService } from './services/story-parser.service';
 import { StoryAccessService } from './services/story-access.service';
 import { StoryLibraryService } from './services/story-library.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
+import { NotificationsModule } from '../../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { IllustrationStatusService } from '../../illustration/services/illustrat
       User,
       Notification,
     ]),
+    NotificationsModule,
   ],
   controllers: [StoryController],
   providers: [

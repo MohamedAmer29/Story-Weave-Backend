@@ -24,6 +24,14 @@ const TEXT_SUPPRESSION =
 
 const CONTINUITY_SNIPPET_LENGTH = 300;
 
+const MAX_AI_PROMPT_LENGTH = 2000;
+
+interface PromptSection {
+  priority: number;
+  content: string;
+  essential: boolean;
+}
+
 @Injectable()
 export class ScenePromptService {
   private readonly logger = new Logger(ScenePromptService.name);
@@ -86,7 +94,7 @@ export class ScenePromptService {
 
     const prompt = parts.join('\n\n').trim();
     this.logger.debug(`Generated image prompt for page ${page.pageNumber}`);
-    return prompt;
+    return this.truncatePrompt(prompt);
   }
 
   buildCoverPrompt(story: Story): string {
@@ -141,7 +149,175 @@ export class ScenePromptService {
 
     const prompt = parts.join('\n\n').trim();
     this.logger.debug('Generated cover prompt');
-    return prompt;
+    return this.truncatePrompt(prompt);
+  }
+
+  private truncatePrompt(prompt: string): string {
+    if (prompt.length <= MAX_AI_PROMPT_LENGTH) {
+      return prompt;
+    }
+
+    this.logger.warn(
+      `Prompt length ${prompt.length} exceeds ${MAX_AI_PROMPT_LENGTH}, attempting intelligent compaction`,
+    );
+
+    // Try intelligent compaction first
+    const compacted = this.compactPrompt(prompt);
+    if (compacted.length <= MAX_AI_PROMPT_LENGTH) {
+      this.logger.log(
+        `Prompt compacted from ${prompt.length} to ${compacted.length} characters`,
+      );
+      return compacted;
+    }
+
+    // If compaction still exceeds limit, use safe truncation at word boundary
+    this.logger.error(
+      `Compacted prompt still exceeds limit (${compacted.length}), truncating at word boundary`,
+    );
+    return this.truncateAtWordBoundary(compacted, MAX_AI_PROMPT_LENGTH);
+  }
+
+  private compactPrompt(prompt: string): string {
+    const sections: PromptSection[] = [];
+    const lines = prompt.split('\n').filter((line) => line.trim());
+
+    // Classify each section by priority
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      let priority = 5; // Default priority
+      let essential = false;
+
+      // Priority 1: Core scene/events (highest priority)
+      if (
+        lowerLine.includes('story section:') ||
+        lowerLine.includes('scene:') ||
+        lowerLine.includes('events:') ||
+        lowerLine.includes('title:')
+      ) {
+        priority = 1;
+        essential = true;
+      }
+      // Priority 2: Characters
+      else if (
+        lowerLine.includes('characters:') ||
+        lowerLine.includes('character:')
+      ) {
+        priority = 2;
+        essential = true;
+      }
+      // Priority 3: Setting/Location
+      else if (
+        lowerLine.includes('location:') ||
+        lowerLine.includes('setting:')
+      ) {
+        priority = 3;
+        essential = true;
+      }
+      // Priority 4: Genre/Story type
+      else if (
+        lowerLine.includes('genre') ||
+        lowerLine.includes('story type') ||
+        lowerLine.includes('illustration for a')
+      ) {
+        priority = 4;
+      }
+      // Priority 5: Language theme
+      else if (
+        lowerLine.includes('language guidance') ||
+        lowerLine.includes('language theme')
+      ) {
+        priority = 5;
+      }
+      // Priority 6: Visual style guidance
+      else if (
+        lowerLine.includes('visual style') ||
+        lowerLine.includes('style direction')
+      ) {
+        priority = 6;
+      }
+      // Priority 7: Continuity
+      else if (
+        lowerLine.includes('continuity') ||
+        lowerLine.includes('previous section')
+      ) {
+        priority = 7;
+      }
+      // Priority 8: Generic instructions (lowest priority)
+      else if (
+        lowerLine.includes('maintain') ||
+        lowerLine.includes('do not include') ||
+        lowerLine.includes('no text') ||
+        lowerLine.includes('no captions')
+      ) {
+        priority = 8;
+      }
+
+      sections.push({ priority, content: line, essential });
+    }
+
+    // Sort by priority (lower number = higher priority)
+    sections.sort((a, b) => a.priority - b.priority);
+
+    // Build compacted prompt, starting with highest priority
+    const compacted: string[] = [];
+    let currentLength = 0;
+
+    for (const section of sections) {
+      const sectionWithNewline =
+        compacted.length > 0 ? `\n${section.content}` : section.content;
+      const newLength = currentLength + sectionWithNewline.length;
+
+      if (newLength <= MAX_AI_PROMPT_LENGTH) {
+        compacted.push(section.content);
+        currentLength = newLength;
+      } else if (section.essential) {
+        // For essential sections, try to fit by removing less essential ones
+        // Remove lowest priority non-essential sections first
+        for (let i = compacted.length - 1; i >= 0; i--) {
+          const removedSection = sections.find(
+            (s) => s.content === compacted[i],
+          );
+          if (
+            removedSection &&
+            !removedSection.essential &&
+            removedSection.priority > section.priority
+          ) {
+            const removedLength = compacted[i].length + (i > 0 ? 1 : 0);
+            currentLength -= removedLength;
+            compacted.splice(i, 1);
+
+            if (
+              currentLength + sectionWithNewline.length <=
+              MAX_AI_PROMPT_LENGTH
+            ) {
+              compacted.push(section.content);
+              currentLength += sectionWithNewline.length;
+              break;
+            }
+          }
+        }
+      }
+      // If still doesn't fit and not essential, skip it
+    }
+
+    return compacted.join('\n').trim();
+  }
+
+  private truncateAtWordBoundary(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+
+    const truncated = text.substring(0, maxLength);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    const lastNewlineIndex = truncated.lastIndexOf('\n');
+    const lastBoundary = Math.max(lastSpaceIndex, lastNewlineIndex);
+
+    if (lastBoundary > maxLength * 0.8) {
+      return truncated.substring(0, lastBoundary).trim();
+    }
+
+    return truncated.trim();
   }
 
   private buildSubject(story: Story, page: StoryPage): string {

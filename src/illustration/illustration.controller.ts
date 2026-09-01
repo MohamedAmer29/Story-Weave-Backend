@@ -66,6 +66,20 @@ export class IllustrationController {
     return this.illustrationService.regeneratePage(userId, storyId, pageId);
   }
 
+  @Post(':storyId/cover/regenerate')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Queue regeneration of story cover image' })
+  @ApiResponse({ status: 202, description: 'Cover regeneration queued' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async regenerateCover(
+    @CurrentUser('id') userId: string,
+    @Param('storyId') storyId: string,
+  ) {
+    return this.illustrationService.regenerateCover(userId, storyId);
+  }
+
   @Get(':storyId/illustrations/status')
   @ApiOperation({ summary: 'Get illustration status for a story' })
   @ApiResponse({ status: 200, description: 'Illustration status' })

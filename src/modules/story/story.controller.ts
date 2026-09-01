@@ -33,6 +33,7 @@ import {
   PaginatedStoriesResponseDto,
 } from './dto/story-response.dto';
 import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
+import { StoryType } from '../../common/enums/story-type.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
@@ -156,8 +157,20 @@ export class StoryController {
           format: 'binary',
           description: 'PDF file to upload',
         },
+        storyType: {
+          type: 'string',
+          description: 'Story type (genre) - required',
+        },
+        visualStyle: {
+          type: 'string',
+          description: 'Optional visual style for illustrations',
+        },
+        language: {
+          type: 'string',
+          description: 'Optional story language (ARABIC or ENGLISH)',
+        },
       },
-      required: ['file'],
+      required: ['file', 'storyType'],
     },
   })
   @ApiOperation({ summary: 'Upload a PDF to create a story' })
@@ -167,7 +180,24 @@ export class StoryController {
   async uploadPdf(
     @CurrentUser('id') userId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body() body: { storyType?: any; visualStyle?: string; language?: string },
   ): Promise<StoryResponseDto> {
-    return this.storyService.createFromPdf(userId, file);
+    return this.storyService.createFromPdf(userId, file, body);
+  }
+
+  @Public()
+  @Get('types')
+  @ApiOperation({ summary: 'Get supported story types (genres)' })
+  @ApiResponse({ status: 200, description: 'List of story types' })
+  async getTypes() {
+    const types = Object.values(StoryType) as string[];
+    const data = types.map((t) => ({
+      value: t,
+      label: t
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/(^|\s)\S/g, (s) => s.toUpperCase()),
+    }));
+    return { data };
   }
 }

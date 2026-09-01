@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Inject } from '@nestjs/common';
 import { Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { Queue } from 'bullmq';
 import { Story } from '../database/entities/story.entity';
 import { StoryPage } from '../database/entities/story-page.entity';
@@ -15,6 +16,7 @@ import { StoryStatus } from '../common/enums/story-status.enum';
 import {
   ILLUSTRATION_QUEUE,
   ILLUSTRATION_JOB_PREFIX,
+  ILLUSTRATION_COVER_JOB_PREFIX,
 } from './illustration.constants';
 import { IllustrationPageStatus } from './enums/illustration-page-status.enum';
 import { StoryIllustrationStatus } from './enums/story-illustration-status.enum';
@@ -27,6 +29,7 @@ export interface IllustrationJobData {
   storyId: string;
   storyPageId: string;
   userId: string;
+  attemptId?: string | null;
   prompt: string;
 }
 
@@ -80,13 +83,73 @@ export class IllustrationService {
 
     this.validateStoryReady(story);
 
+    // Attempt to claim a generation attempt id atomically to prevent duplicates
+    const attemptId = randomUUID();
+    const claim = await this.storyRepository
+      .createQueryBuilder()
+      .update(Story)
+      .set({ illustrationGenerationAttemptId: attemptId })
+      .where('id = :id AND (illustrationGenerationAttemptId IS NULL)', {
+        id: storyId,
+      })
+      .execute();
+
+    if (!claim.affected || claim.affected === 0) {
+      this.logger.log(
+        `[StoryGeneration] Generation already active for story ${storyId}. Skipping duplicate request.`,
+      );
+      throw new BadRequestException(
+        'Illustration generation already in progress for this story',
+      );
+    }
+
+    // reflect claimed attempt locally
+    story.illustrationGenerationAttemptId = attemptId;
+
     const pages = story.pages || [];
+    const orderedPages = [...pages].sort((a, b) => a.pageNumber - b.pageNumber);
     const eligiblePages = this.selectPagesForQueueing(
-      pages,
+      orderedPages,
       dto?.regenerate === true,
     );
 
     let queuedPages = 0;
+
+    // Queue cover job first (separate from story pages)
+    try {
+      // build cover prompt
+      const coverPrompt = this.scenePromptService.buildCoverPrompt(story);
+      story.coverImagePrompt = coverPrompt;
+      story.coverImageStatus = IllustrationPageStatus.QUEUED;
+      await this.storyRepository.save(story);
+
+      await this.addCoverJob({
+        storyId,
+        userId,
+        prompt: coverPrompt,
+        attemptId,
+      });
+      queuedPages++;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to queue cover for story ${storyId}: ${error?.message ?? 'Unknown'}`,
+      );
+      // release claim so future attempts can proceed
+      await this.storyRepository
+        .createQueryBuilder()
+        .update(Story)
+        .set({ illustrationGenerationAttemptId: null })
+        .where('id = :id AND illustrationGenerationAttemptId = :attemptId', {
+          id: storyId,
+          attemptId,
+        })
+        .execute()
+        .catch(() => undefined);
+
+      throw new BadRequestException(
+        'Failed to queue cover job. Please try again.',
+      );
+    }
 
     for (const page of eligiblePages) {
       const previousStatus = page.imageStatus ?? IllustrationPageStatus.PENDING;
@@ -96,11 +159,21 @@ export class IllustrationService {
         page.imageError = null;
         await this.storyPageRepository.save(page);
 
-        const prompt = this.scenePromptService.buildImagePrompt(story, page);
+        const prompt = this.scenePromptService.buildImagePrompt(
+          story,
+          page,
+          orderedPages,
+        );
         page.imagePrompt = prompt;
         await this.storyPageRepository.save(page);
 
-        await this.addJob({ storyId, storyPageId: page.id, userId, prompt });
+        await this.addJob({
+          storyId,
+          storyPageId: page.id,
+          userId,
+          prompt,
+          attemptId,
+        });
         queuedPages++;
       } catch (error: any) {
         this.logger.error(
@@ -110,6 +183,18 @@ export class IllustrationService {
         );
         page.imageStatus = previousStatus;
         await this.storyPageRepository.save(page).catch(() => undefined);
+        // release claim if we failed during queueing so future attempts can proceed
+        await this.storyRepository
+          .createQueryBuilder()
+          .update(Story)
+          .set({ illustrationGenerationAttemptId: null })
+          .where('id = :id AND illustrationGenerationAttemptId = :attemptId', {
+            id: storyId,
+            attemptId,
+          })
+          .execute()
+          .catch(() => undefined);
+
         throw new BadRequestException(
           'Failed to queue some illustration jobs. Please try again.',
         );
@@ -123,12 +208,20 @@ export class IllustrationService {
     );
 
     await this.resetGenerationNotified(story);
-    await this.storyProgressService.notifyGenerationStarted(
-      userId,
-      story.id,
-      story.title,
-      pages.length,
-    );
+    // Only create a STARTED notification if the attempt is still claimed
+    if (story.illustrationGenerationAttemptId) {
+      const totalImages = pages.length + 1; // include cover
+      await this.storyProgressService.notifyGenerationStarted(
+        userId,
+        story.id,
+        story.title,
+        totalImages,
+      );
+    } else {
+      this.logger.log(
+        `[StoryGeneration] Attempt ${storyId} no longer claimed; skipping STARTED notification.`,
+      );
+    }
     await this.storyProgressService.emitProgress({
       storyId,
       userId,
@@ -185,13 +278,28 @@ export class IllustrationService {
     const previousStatus = page.imageStatus;
 
     try {
-      const prompt = this.scenePromptService.buildImagePrompt(story, page);
+      const allPages = await this.storyPageRepository.find({
+        where: { storyId },
+        order: { pageNumber: 'ASC' },
+      });
+      const prompt = this.scenePromptService.buildImagePrompt(
+        story,
+        page,
+        allPages,
+      );
       page.imagePrompt = prompt;
       page.imageStatus = IllustrationPageStatus.QUEUED;
       page.imageError = null;
       await this.storyPageRepository.save(page);
 
-      await this.addJob({ storyId, storyPageId: pageId, userId, prompt });
+      const regenAttemptId = randomUUID();
+      await this.addJob({
+        storyId,
+        storyPageId: pageId,
+        userId,
+        prompt,
+        attemptId: regenAttemptId,
+      });
 
       await this.resetGenerationNotified(story);
       const pages = await this.storyPageRepository.find({
@@ -226,10 +334,30 @@ export class IllustrationService {
   }
 
   private async addJob(data: IllustrationJobData): Promise<void> {
-    const jobId = `${ILLUSTRATION_JOB_PREFIX}-${data.storyPageId}`;
+    const jobId = `${ILLUSTRATION_JOB_PREFIX}-${data.storyPageId}${
+      data.attemptId ? `-${data.attemptId}` : ''
+    }`;
     await this.illustrationQueue.add('illustrate-page', data, {
       jobId,
     });
+  }
+
+  private async addCoverJob(data: {
+    storyId: string;
+    userId: string;
+    prompt: string;
+    attemptId?: string | null;
+  }): Promise<void> {
+    const jobId = `${ILLUSTRATION_COVER_JOB_PREFIX}-${data.storyId}${data.attemptId ? `-${data.attemptId}` : ''}`;
+    await this.illustrationQueue.add(
+      'illustrate-cover',
+      {
+        storyId: data.storyId,
+        userId: data.userId,
+        prompt: data.prompt,
+      },
+      { jobId },
+    );
   }
 
   private selectPagesForQueueing(

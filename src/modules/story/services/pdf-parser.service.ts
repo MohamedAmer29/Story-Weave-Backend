@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import * as pdf from 'pdf-parse';
+// pdf-parse exports a function; use default import to call it directly
+import pdf from 'pdf-parse';
 
 @Injectable()
 export class PdfParserService {
@@ -27,7 +28,19 @@ export class PdfParserService {
         throw error;
       }
 
-      this.logger.error(`PDF parsing failed: ${error.message}`);
+      // Log detailed error for diagnostics (stack included)
+      this.logger.error(
+        `PDF parsing failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        error instanceof Error ? error.stack : undefined,
+      );
+
+      // Surface a clearer message if pdf-parse produced a known error
+      const msg =
+        error && (error as any).message
+          ? (error as any).message
+          : 'Failed to parse PDF file';
       throw new BadRequestException('Failed to parse PDF file');
     }
   }

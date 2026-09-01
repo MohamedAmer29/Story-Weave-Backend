@@ -60,15 +60,41 @@ export class CloudflareProvider implements AIProvider {
     const fullUrl = `${this.baseUrl}/${url}`;
 
     this.logger.log(`Generating image with model: ${model}`);
-    this.logger.debug(`Request URL: ${fullUrl}`);
+    // redact long IDs in the logged URL
+    this.logger.debug(
+      `Request URL: ${fullUrl.replace(/[A-Fa-f0-9-]{16,}/g, '<redacted>')}`,
+    );
+
+    if (typeof prompt !== 'string' || prompt.trim().length === 0) {
+      this.logger.error('Invalid prompt provided to CloudflareProvider');
+      throw new InternalServerErrorException('Invalid prompt for AI provider');
+    }
+
     this.logger.debug(`Prompt length: ${prompt.length} characters`);
+
+    // FLUX models enforce a prompt length limit (Cloudflare error showed 2048).
+    const MAX_PROMPT_LENGTH = 2048;
+    let sendPrompt = prompt;
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      this.logger.warn(
+        `Prompt length ${prompt.length} exceeds ${MAX_PROMPT_LENGTH}, truncating to fit model limit`,
+      );
+      // Try to cut at a space boundary for readability.
+      const truncated = prompt.slice(0, MAX_PROMPT_LENGTH - 3);
+      const lastSpace = truncated.lastIndexOf(' ');
+      sendPrompt =
+        lastSpace > Math.floor((MAX_PROMPT_LENGTH - 3) / 2)
+          ? `${truncated.slice(0, lastSpace)}...`
+          : `${truncated}...`;
+      this.logger.debug(`Truncated prompt length: ${sendPrompt.length}`);
+    }
 
     try {
       const response = await firstValueFrom(
         this.httpService.post<CloudflareResponse>(
           fullUrl,
           {
-            prompt,
+            prompt: sendPrompt,
           },
           {
             headers: {
@@ -141,11 +167,17 @@ export class CloudflareProvider implements AIProvider {
           );
         }
 
-        this.logger.error(
-          `Cloudflare API error response: ${JSON.stringify(data)}`,
-        );
+        // Log the response body for debugging without sensitive headers
+        let safeBody: string;
+        try {
+          safeBody = JSON.stringify(data);
+        } catch (e) {
+          safeBody = String(data);
+        }
+
+        this.logger.error(`Cloudflare API error response: ${safeBody}`);
         throw new InternalServerErrorException(
-          `Cloudflare API error (${status})`,
+          `Cloudflare API error (${status}): ${safeBody}`,
         );
       }
 
@@ -157,9 +189,11 @@ export class CloudflareProvider implements AIProvider {
       }
 
       this.logger.error(
-        `Unexpected error calling Cloudflare API: ${error.message}`,
+        `Unexpected error calling Cloudflare API: ${error?.message}`,
       );
-      throw new InternalServerErrorException('Failed to generate image');
+      throw new InternalServerErrorException(
+        `Failed to generate image: ${error?.message ?? 'unknown'}`,
+      );
     }
   }
 }

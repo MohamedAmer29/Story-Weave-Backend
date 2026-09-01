@@ -29,6 +29,7 @@ import {
   ParsedStory,
 } from './services/story-parser.service';
 import { PdfParserService } from './services/pdf-parser.service';
+import { StoryLanguage } from '../../common/enums/story-language.enum';
 import { StoryAccessService } from './services/story-access.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
@@ -70,11 +71,15 @@ export class StoryService {
       userId,
       title: parsedStory.title,
       description: createStoryDto.description,
+      storyType: createStoryDto.storyType,
       originalText: createStoryDto.text,
       sourceType: createStoryDto.sourceType || SourceType.TEXT,
       status: StoryStatus.PROCESSING,
       visibility: createStoryDto.visibility || StoryVisibility.PRIVATE,
-      language: createStoryDto.language || parsedStory.language,
+      language:
+        (createStoryDto.language as StoryLanguage) ??
+        parsedStory.language ??
+        undefined,
       visualStyle: createStoryDto.visualStyle,
     });
 
@@ -211,6 +216,7 @@ export class StoryService {
     return {
       id: story.id,
       title: story.title,
+      storyType: story.storyType ?? null,
       description: story.description ?? null,
       visibility: story.visibility,
       status: story.status,
@@ -230,8 +236,20 @@ export class StoryService {
         pageNumber: page.pageNumber,
         title: page.title ?? null,
         text: page.text,
+        wordCount: page.wordCount ?? null,
         sceneDescription: page.sceneDescription ?? null,
         location: page.location ?? null,
+        imageUrl: page.imageUrl ?? null,
+        imageStatus: page.imageStatus ?? null,
+      })),
+      cover: {
+        imageUrl: story.coverImageUrl ?? null,
+        imageStatus: (story.coverImageStatus as any) ?? null,
+      },
+      sections: pages.map((page) => ({
+        pageNumber: page.pageNumber,
+        text: page.text,
+        wordCount: page.wordCount ?? 0,
         imageUrl: page.imageUrl ?? null,
         imageStatus: page.imageStatus ?? null,
       })),
@@ -332,6 +350,7 @@ export class StoryService {
   async createFromPdf(
     userId: string,
     file: Express.Multer.File,
+    body?: { storyType?: any; visualStyle?: string; language?: string },
   ): Promise<StoryResponseDto> {
     this.logger.log(`Creating story from PDF for user: ${userId}`);
 
@@ -350,6 +369,25 @@ export class StoryService {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
 
+    this.logger.log(
+      `Received PDF upload: name=${file.originalname}, mime=${file.mimetype}, size=${file.size}`,
+    );
+
+    // Basic buffer validation
+    if (!file.buffer || file.buffer.length === 0) {
+      this.logger.error('Uploaded PDF buffer is empty');
+      throw new BadRequestException('Uploaded PDF is empty');
+    }
+
+    // Check PDF signature
+    const signature = file.buffer.slice(0, 5).toString('utf8');
+    if (!signature.startsWith('%PDF')) {
+      this.logger.error(
+        `Uploaded file does not appear to be a PDF (signature=${signature})`,
+      );
+      throw new BadRequestException('Uploaded file is not a valid PDF');
+    }
+
     try {
       const extractedText = await this.pdfParserService.extractText(
         file.buffer,
@@ -365,7 +403,12 @@ export class StoryService {
         sourceType: SourceType.PDF,
         status: StoryStatus.PROCESSING,
         visibility: StoryVisibility.PRIVATE,
-        language: parsedStory.language,
+        language:
+          (body?.language as StoryLanguage) ??
+          parsedStory.language ??
+          undefined,
+        storyType: body?.storyType ?? undefined,
+        visualStyle: body?.visualStyle ?? undefined,
       });
 
       await this.storyRepository.save(story);
@@ -401,14 +444,18 @@ export class StoryService {
     storyId: string,
     sections: Array<{ order: number; text: string }>,
   ): Promise<void> {
-    const pages = sections.map((section) =>
-      this.storyPageRepository.create({
+    const pages = sections.map((section) => {
+      const normalized = section.text.replace(/\s+/g, ' ').trim();
+      const wordCount =
+        normalized.length === 0 ? 0 : normalized.split(' ').length;
+      return this.storyPageRepository.create({
         storyId,
         pageNumber: section.order,
         text: section.text,
+        wordCount,
         status: PageStatus.READY,
-      }),
-    );
+      });
+    });
 
     await this.storyPageRepository.save(pages);
   }
@@ -418,13 +465,14 @@ export class StoryService {
       id: story.id,
       userId: story.userId,
       title: story.title,
-      description: story.description,
+      description: story.description ?? undefined,
+      storyType: story.storyType ?? null,
       originalText: story.originalText,
       sourceType: story.sourceType,
       status: story.status,
       visibility: story.visibility,
-      language: story.language,
-      errorMessage: story.errorMessage,
+      language: story.language ?? undefined,
+      errorMessage: story.errorMessage ?? undefined,
       createdAt: story.createdAt,
       updatedAt: story.updatedAt,
     };

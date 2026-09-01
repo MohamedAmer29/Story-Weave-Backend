@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Server } from 'socket.io';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +17,7 @@ export enum StoryProgressEvent {
 @Injectable()
 export class StoryProgressService {
   private io: Server | null = null;
+  private readonly logger = new Logger(StoryProgressService.name);
 
   constructor(
     @InjectRepository(Story)
@@ -147,7 +148,10 @@ export class StoryProgressService {
       failed: progress.failed,
     });
 
+    // mark terminal notification and clear the active generation attempt so
+    // subsequent generations can be started.
     story.illustrationGenerationNotifiedAt = new Date();
+    story.illustrationGenerationAttemptId = null;
     await this.storyRepository.save(story).catch(() => undefined);
   }
 
@@ -207,6 +211,22 @@ export class StoryProgressService {
     title: string,
     totalPages: number,
   ): Promise<void> {
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+    });
+    if (!story) {
+      return;
+    }
+
+    // If there is no claimed generation attempt, another process likely cancelled or
+    // another generation is already active; skip creating duplicate STARTED notifications.
+    if (!story.illustrationGenerationAttemptId) {
+      this.logger?.log?.(
+        `[StoryProgress] Skipping STARTED notification for ${storyId}: no active attempt`,
+      );
+      return;
+    }
+
     await this.notificationsService.create(
       userId,
       NotificationType.STORY_GENERATION_STARTED,

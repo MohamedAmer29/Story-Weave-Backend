@@ -12,7 +12,10 @@ import {
 import { StoryStatus } from '../../common/enums/story-status.enum';
 import { SourceType } from '../../common/enums/source-type.enum';
 import { StoryVisibility } from '../../common/enums/story-visibility.enum';
+import { StoryType } from '../../common/enums/story-type.enum';
+import { StoryLanguage } from '../../common/enums/story-language.enum';
 import { StoryIllustrationStatus } from '../../illustration/enums/story-illustration-status.enum';
+import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
 import { User } from './user.entity';
 import { StoryPage } from './story-page.entity';
 
@@ -59,11 +62,23 @@ export class Story {
   })
   visibility: StoryVisibility;
 
-  @Column({ nullable: true })
-  language: string;
+  @Index('IDX_stories_story_type')
+  @Column({
+    type: 'enum',
+    enum: StoryType,
+    nullable: true,
+  })
+  storyType: StoryType | null;
 
   @Column({ nullable: true, type: 'text' })
   visualStyle: string;
+
+  @Column({
+    type: 'enum',
+    enum: StoryLanguage,
+    nullable: true,
+  })
+  language: StoryLanguage | null;
 
   @Column({ nullable: true, type: 'text' })
   errorMessage: string;
@@ -79,6 +94,9 @@ export class Story {
   @Column({ nullable: true, type: 'timestamp' })
   illustrationGenerationNotifiedAt: Date | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  illustrationGenerationAttemptId: string | null;
+
   @Index('IDX_stories_created_at')
   @CreateDateColumn()
   createdAt: Date;
@@ -93,4 +111,27 @@ export class Story {
 
   @OneToMany(() => StoryPage, (page) => page.story, { cascade: true })
   pages: StoryPage[];
+
+  @Column({ nullable: true, type: 'text' })
+  coverImageUrl: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  coverImagePublicId: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+  coverImagePrompt: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: IllustrationPageStatus,
+    default: IllustrationPageStatus.PENDING,
+    nullable: true,
+  })
+  coverImageStatus: IllustrationPageStatus | null;
+
+  @Column({ nullable: true, type: 'text' })
+  coverImageError: string | null;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  coverImageGeneratedAt: Date | null;
 }

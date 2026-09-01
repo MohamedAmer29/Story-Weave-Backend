@@ -15,6 +15,7 @@ import { IllustrationController } from './illustration.controller';
 import { IllustrationService } from './illustration.service';
 import { IllustrationProcessor } from './illustration.processor';
 import { ScenePromptService } from './services/scene-prompt.service';
+import { GenreVisualStyleService } from './services/genre-visual-style.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 
 @Global()
@@ -32,6 +33,7 @@ import { IllustrationStatusService } from './services/illustration-status.servic
     IllustrationService,
     IllustrationProcessor,
     ScenePromptService,
+    GenreVisualStyleService,
     IllustrationStatusService,
     {
       provide: ILLUSTRATION_QUEUE,

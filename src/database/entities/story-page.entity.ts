@@ -31,6 +31,9 @@ export class StoryPage {
   @Column({ type: 'text' })
   text: string;
 
+  @Column({ type: 'int', nullable: true })
+  wordCount: number | null;
+
   @Column({ nullable: true, type: 'text' })
   sceneDescription: string;
 

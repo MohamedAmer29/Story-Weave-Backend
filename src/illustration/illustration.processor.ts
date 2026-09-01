@@ -80,7 +80,88 @@ export class IllustrationProcessor
   }
 
   async processJob(job: Job<IllustrationJobData>): Promise<void> {
-    const { storyPageId, prompt, userId } = job.data;
+    const { storyPageId, prompt, userId } = job.data as any;
+
+    // Handle cover jobs
+    if (job.name === 'illustrate-cover') {
+      const { storyId } = job.data as any;
+
+      const story = await this.storyRepository.findOne({
+        where: { id: storyId },
+      });
+      if (!story) {
+        this.logger.warn(`Cover job for missing story ${storyId} ignored`);
+        return;
+      }
+
+      try {
+        // neuron protection
+        const { allowed } = await this.usageService.canMakeRequest(
+          CLOUDFLARE_MODEL_KEY,
+          AI_MODEL_USAGE[CLOUDFLARE_MODEL_KEY]?.neuronsPerRequest ?? 100,
+        );
+
+        if (!allowed) {
+          this.logger.warn(
+            `AI daily limit reached. Not calling Cloudflare for cover ${storyId}`,
+          );
+          story.coverImageStatus = IllustrationPageStatus.FAILED;
+          story.coverImageError = 'AI_DAILY_LIMIT_REACHED';
+          await this.storyRepository.save(story);
+          await this.storyProgressService.notifyDailyLimitReached(
+            userId,
+            story.id,
+          );
+          return;
+        }
+
+        const promptToUse = prompt || story.coverImagePrompt || '';
+        if (
+          typeof promptToUse !== 'string' ||
+          promptToUse.trim().length === 0
+        ) {
+          this.logger.error(`Invalid cover prompt for story ${storyId}`);
+          story.coverImageStatus = IllustrationPageStatus.FAILED;
+          story.coverImageError = 'Invalid prompt';
+          await this.storyRepository.save(story);
+          return;
+        }
+
+        story.coverImageStatus = IllustrationPageStatus.GENERATING;
+        await this.storyRepository.save(story);
+
+        const result = await this.cloudflareProvider.generateImage(promptToUse);
+
+        story.coverImageStatus = IllustrationPageStatus.UPLOADING;
+        await this.storyRepository.save(story);
+
+        const upload = await this.cloudinaryService.uploadImage(result.buffer, {
+          folder: `storyforge/stories/${story.id}/cover`,
+          publicId: `${story.id}-cover`,
+        });
+
+        story.coverImageUrl = upload.secureUrl;
+        story.coverImagePublicId = upload.publicId;
+        story.coverImageStatus = IllustrationPageStatus.COMPLETED;
+        story.coverImageError = null;
+        story.coverImageGeneratedAt = new Date();
+        await this.storyRepository.save(story);
+
+        this.logger.log(`Cover generation completed for story: ${storyId}`);
+        // notify page completed for cover? Emit a dedicated notification if needed
+        await this.publicCacheService.bust();
+      } catch (error: any) {
+        this.logger.error(
+          `Cover job for story ${storyId} failed: ${error?.message}`,
+        );
+        story.coverImageStatus = IllustrationPageStatus.FAILED;
+        story.coverImageError = (error as Error)?.message ?? 'Unknown error';
+        await this.storyRepository.save(story).catch(() => undefined);
+        throw error;
+      }
+
+      return;
+    }
 
     this.logger.log(
       `Illustration job started for page: ${storyPageId} (user: ${userId})`,
@@ -133,6 +214,21 @@ export class IllustrationProcessor
       }
 
       this.logger.log(`FLUX request started for page: ${storyPageId}`);
+
+      if (typeof prompt !== 'string' || prompt.trim().length === 0) {
+        this.logger.error(
+          `Invalid prompt for page ${storyPageId}; aborting Cloudflare request`,
+        );
+        await this.markPageFailed(page, 'Invalid prompt');
+        const progress = await this.refreshStoryStatus(story);
+        await this.storyProgressService.onChangeStatus(story, progress.result);
+        await this.publicCacheService.bust();
+        return;
+      }
+
+      this.logger.debug(
+        `[CloudflareRequest] model=${CLOUDFLARE_MODEL_KEY} promptLength=${prompt.length}`,
+      );
 
       const result = await this.cloudflareProvider.generateImage(prompt);
 

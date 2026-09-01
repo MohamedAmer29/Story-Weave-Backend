@@ -39,6 +39,7 @@ describe('StoryProgressService', () => {
   beforeEach(async () => {
     storyRepo = {
       save: jest.fn().mockImplementation((s) => Promise.resolve(s)),
+      findOne: jest.fn().mockResolvedValue(null),
     };
     notifications = {
       create: jest.fn().mockResolvedValue({}),
@@ -151,6 +152,11 @@ describe('StoryProgressService', () => {
 
   describe('notifyGenerationStarted', () => {
     it('creates a started notification', async () => {
+      // make the repository return a story with an active attempt claim
+      (storyRepo.findOne as jest.Mock).mockResolvedValue(
+        makeStory({ illustrationGenerationAttemptId: 'attempt-1' }),
+      );
+
       await service.notifyGenerationStarted('user-1', 'story-1', 'Story', 3);
 
       expect(notifications.create).toHaveBeenCalledWith(

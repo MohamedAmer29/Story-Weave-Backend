@@ -8,6 +8,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SourceType } from '../../../common/enums/source-type.enum';
 import { StoryVisibility } from '../../../common/enums/story-visibility.enum';
+import { StoryType } from '../../../common/enums/story-type.enum';
 
 export class CreateStoryDto {
   @ApiProperty({ description: 'Story title', maxLength: 200 })
@@ -21,6 +22,15 @@ export class CreateStoryDto {
   @IsOptional()
   @MaxLength(500)
   description?: string;
+
+  @ApiProperty({
+    description: 'Story type (genre)',
+    enum: StoryType,
+    example: StoryType.FANTASY,
+  })
+  @IsEnum(StoryType)
+  @IsNotEmpty()
+  storyType: StoryType;
 
   @ApiProperty({ description: 'Original story text', type: String })
   @IsString()

@@ -7,6 +7,13 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Story } from './story.entity';
+import { RefreshToken } from './refresh-token.entity';
+
+export enum UserRole {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+}
 
 @Entity('users')
 export class User {
@@ -16,11 +23,35 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ select: false })
   password: string;
+
+  @Column()
+  firstName: string;
+
+  @Column()
+  lastName: string;
 
   @Column({ nullable: true })
   name: string;
+
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
+  role: UserRole;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @Column({ default: false })
+  emailVerified: boolean;
+
+  @Column({ default: 0 })
+  tokenVersion: number;
+
+  @Column({ nullable: true, type: 'varchar' })
+  avatarUrl: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  avatarPublicId: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -30,4 +61,7 @@ export class User {
 
   @OneToMany(() => Story, (story) => story.user)
   stories: Story[];
+
+  @OneToMany(() => RefreshToken, (rt) => rt.user)
+  refreshTokens: RefreshToken[];
 }

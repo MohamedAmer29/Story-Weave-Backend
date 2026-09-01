@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -20,6 +22,8 @@ async function bootstrap() {
 
   app.setGlobalPrefix(apiPrefix);
 
+  app.use(cookieParser());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -32,6 +36,8 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Security headers
   app.use((req, res, next) => {
@@ -48,9 +54,20 @@ async function bootstrap() {
     .setDescription('AI-powered illustrated story platform API')
     .setVersion('1.0')
     .addBearerAuth()
+    .addCookieAuth('refresh_token')
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
+
+  // Bare-root health/hello endpoint (outside the API prefix)
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'AI Stories API',
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   if (corsEnabled) {
     app.enableCors({

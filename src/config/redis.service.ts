@@ -41,7 +41,9 @@ export class RedisService {
   async set(key: string, value: string, ttl?: number): Promise<string> {
     const client = this.getClient();
     if (ttl) {
-      return (await client.set(key, value, 'EX', Math.floor(ttl / 1000))) || value;
+      return (
+        (await client.set(key, value, 'EX', Math.floor(ttl / 1000))) || value
+      );
     }
     return (await client.set(key, value)) || value;
   }
@@ -56,6 +58,14 @@ export class RedisService {
 
   async expire(key: string, seconds: number): Promise<number> {
     return this.getClient().expire(key, seconds);
+  }
+
+  async pexpire(key: string, milliseconds: number): Promise<number> {
+    return this.getClient().pexpire(key, milliseconds);
+  }
+
+  pipeline() {
+    return this.getClient().pipeline();
   }
 
   async disconnect(): Promise<void> {

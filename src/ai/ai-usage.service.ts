@@ -51,7 +51,8 @@ export class AiUsageService {
       return { allowed: false, used: 0, remaining: 0 };
     }
 
-    const cost = estimatedNeurons ?? AI_MODEL_USAGE[modelKey]?.neuronsPerRequest ?? 100;
+    const cost =
+      estimatedNeurons ?? AI_MODEL_USAGE[modelKey]?.neuronsPerRequest ?? 100;
     const safetyLimit = this.getSafetyLimit();
     const key = this.currentDateKey;
 
@@ -64,8 +65,9 @@ export class AiUsageService {
     );
 
     const allowed = Array.isArray(result) ? result[0] === 1 : false;
-    const usage =
-      Array.isArray(result) ? (result[1] || result[0] || 0) : (result || 0);
+    const usage = Array.isArray(result)
+      ? result[1] || result[0] || 0
+      : result || 0;
 
     if (allowed) {
       AiUsageService.logger.debug(
@@ -87,7 +89,10 @@ export class AiUsageService {
   }
 
   getSafetyLimit(): number {
-    const safetyLimit = parseInt(process.env.AI_NEURON_SAFETY_LIMIT || '9500', 10);
+    const safetyLimit = parseInt(
+      process.env.AI_NEURON_SAFETY_LIMIT || '9500',
+      10,
+    );
     return safetyLimit;
   }
 
@@ -112,7 +117,8 @@ export class AiUsageService {
     const used = await this.getCurrentUsage();
     const limit = this.getSafetyLimit();
     const remaining = Math.max(0, limit - used);
-    const percentage = limit > 0 ? Math.round((used / limit) * 100 * 100) / 100 : 0;
+    const percentage =
+      limit > 0 ? Math.round((used / limit) * 100 * 100) / 100 : 0;
 
     return {
       used,

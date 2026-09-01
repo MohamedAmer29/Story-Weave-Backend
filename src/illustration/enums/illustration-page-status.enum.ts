@@ -1,0 +1,8 @@
+export enum IllustrationPageStatus {
+  PENDING = 'PENDING',
+  QUEUED = 'QUEUED',
+  GENERATING = 'GENERATING',
+  UPLOADING = 'UPLOADING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+}

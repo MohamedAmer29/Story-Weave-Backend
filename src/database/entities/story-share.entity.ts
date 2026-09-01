@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  Index,
 } from 'typeorm';
 import { Story } from './story.entity';
 import { User } from './user.entity';
@@ -16,9 +17,11 @@ export class StoryShare {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index('IDX_shares_story_id')
   @Column()
   storyId: string;
 
+  @Index('IDX_shares_user_id')
   @Column()
   userId: string;
 

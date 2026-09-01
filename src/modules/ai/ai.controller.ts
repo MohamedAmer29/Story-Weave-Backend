@@ -13,7 +13,10 @@ import { AIService } from './ai.service';
 import { AiUsageService } from '../../ai/ai-usage.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import { TestImageDto } from './dto/test-image.dto';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('ai')
 @Controller('ai')
 export class AIController {
   constructor(
@@ -25,7 +28,8 @@ export class AIController {
   @Post('test-image')
   @Public()
   @HttpCode(HttpStatus.OK)
-  async testImage(@Body('prompt') prompt: string) {
+  @ApiOperation({ summary: 'Generate a test image (development only)' })
+  async testImage(@Body() body: TestImageDto) {
     const environment = this.configService.get<string>('app.environment');
 
     if (environment !== 'development') {
@@ -34,7 +38,7 @@ export class AIController {
       );
     }
 
-    return this.aiService.generateTestImage(prompt);
+    return this.aiService.generateTestImage(body.prompt);
   }
 
   @Get('usage')
@@ -48,8 +52,9 @@ export class AIController {
       data: {
         dailyLimit: Number(process.env.AI_DAILY_NEURON_LIMIT) || 10000,
         safetyLimit: Number(process.env.AI_NEURON_SAFETY_LIMIT) || 9500,
-        safetyBuffer: (Number(process.env.AI_NEURON_SAFETY_LIMIT) || 9500)
-          - (Number(process.env.AI_DAILY_NEURON_LIMIT) || 10000),
+        safetyBuffer:
+          (Number(process.env.AI_NEURON_SAFETY_LIMIT) || 9500) -
+          (Number(process.env.AI_DAILY_NEURON_LIMIT) || 10000),
         used: status.used,
         remainingUntilSafetyLimit: status.remaining,
         percentageUsed: status.percentage,

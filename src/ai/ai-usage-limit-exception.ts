@@ -6,7 +6,8 @@ export class AiUsageLimitExceededException extends HttpException {
       {
         success: false,
         code: 'AI_DAILY_LIMIT_REACHED',
-        message: 'Daily AI generation limit reached. New AI requests are temporarily disabled.',
+        message:
+          'Daily AI generation limit reached. New AI requests are temporarily disabled.',
         usage: {
           limit,
         },

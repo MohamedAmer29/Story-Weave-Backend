@@ -6,15 +6,19 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { PageStatus } from '../../common/enums/page-status.enum';
+import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
 import { Story } from './story.entity';
 
 @Entity('story_pages')
+@Index('IDX_pages_story_image_status', ['storyId', 'imageStatus'])
 export class StoryPage {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index('IDX_pages_story_id')
   @Column()
   storyId: string;
 
@@ -46,8 +50,25 @@ export class StoryPage {
   })
   status: PageStatus;
 
-  @Column({ nullable: true })
-  imageUrl: string;
+  @Column({ nullable: true, type: 'varchar' })
+  imageUrl: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  imagePublicId: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: IllustrationPageStatus,
+    default: IllustrationPageStatus.PENDING,
+    nullable: true,
+  })
+  imageStatus: IllustrationPageStatus | null;
+
+  @Column({ nullable: true, type: 'text' })
+  imageError: string | null;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  imageGeneratedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

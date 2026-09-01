@@ -20,24 +20,33 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { StoryService } from './story.service';
+import { StoryLibraryService } from './services/story-library.service';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
 import { StoryQueryDto } from './dto/story-query.dto';
+import { StoryListQueryDto } from './dto/story-list-query.dto';
 import {
   StoryResponseDto,
   PaginatedStoriesResponseDto,
 } from './dto/story-response.dto';
+import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('stories')
 @Controller('stories')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class StoryController {
-  constructor(private readonly storyService: StoryService) {}
+  constructor(
+    private readonly storyService: StoryService,
+    private readonly storyLibraryService: StoryLibraryService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new story' })
@@ -62,16 +71,47 @@ export class StoryController {
     return this.storyService.findAll(userId, queryDto);
   }
 
+  @Public()
+  @Get('public')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List public stories (no authentication required)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated public stories' })
+  async listPublicStories(@Query() query: StoryListQueryDto) {
+    const result = await this.storyLibraryService.findPublic(query);
+    return { success: true, ...result };
+  }
+
+  @Public()
+  @Get('public/search')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Search public stories by title or description (public)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated public stories' })
+  async searchPublicStories(@Query() query: StoryListQueryDto) {
+    const result = await this.storyLibraryService.findPublic({
+      ...query,
+      search: query.search || '',
+    });
+    return { success: true, ...result };
+  }
+
+  @Public()
   @Get(':id')
-  @ApiOperation({ summary: 'Get a story by ID' })
-  @ApiResponse({ status: 200, type: StoryResponseDto })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({
+    summary:
+      'Get a story by ID (guest-accessible for PUBLIC stories; owner/shared access otherwise)',
+  })
+  @ApiResponse({ status: 200, type: StoryDetailsResponseDto })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Not Found' })
   async findOne(
-    @CurrentUser('id') userId: string,
+    @CurrentUser('id') userId: string | undefined,
     @Param('id') id: string,
-  ): Promise<StoryResponseDto> {
+  ): Promise<StoryDetailsResponseDto> {
     return this.storyService.findOne(userId, id);
   }
 
@@ -107,6 +147,19 @@ export class StoryController {
   @Post('upload-pdf')
   @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'PDF file to upload',
+        },
+      },
+      required: ['file'],
+    },
+  })
   @ApiOperation({ summary: 'Upload a PDF to create a story' })
   @ApiResponse({ status: 201, type: StoryResponseDto })
   @ApiResponse({ status: 400, description: 'Bad Request - Invalid PDF' })

@@ -1,0 +1,284 @@
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Story } from '../../database/entities/story.entity';
+import { StoryPage } from '../../database/entities/story-page.entity';
+import { StoryShare } from '../../database/entities/story-share.entity';
+import { User } from '../../database/entities/user.entity';
+import { Notification } from '../../notifications/notification.entity';
+import { StoryVisibility } from '../../common/enums/story-visibility.enum';
+import { StoryStatus } from '../../common/enums/story-status.enum';
+import { SourceType } from '../../common/enums/source-type.enum';
+import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
+import { StoryService } from './story.service';
+import { StoryParserService } from './services/story-parser.service';
+import { PdfParserService } from './services/pdf-parser.service';
+import { StoryAccessService } from './services/story-access.service';
+import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
+import { CloudinaryService } from '../../cloudinary/cloudinary.service';
+import { PublicCacheService } from '../../common/services/public-cache.service';
+
+describe('StoryService', () => {
+  let service: StoryService;
+  let storyRepo: any;
+  let pageRepo: any;
+  let userRepo: any;
+  let dataSource: any;
+  let accessService: any;
+  let statusService: any;
+  let cloudinary: any;
+  let cache: any;
+  let parser: any;
+  let pdfParser: any;
+  let manager: any;
+
+  let qb: any;
+
+  function makeQb(terminal: Record<string, unknown>): any {
+    return {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn(),
+      getOne: jest.fn(),
+      ...terminal,
+    };
+  }
+
+  function makeStory(overrides: Partial<Story> = {}): Story {
+    const s = new Story();
+    Object.assign(s, {
+      id: 's-1',
+      userId: 'u-1',
+      title: 'Test Story',
+      description: 'desc',
+      originalText: 'text',
+      sourceType: SourceType.TEXT,
+      status: StoryStatus.READY,
+      visibility: StoryVisibility.PRIVATE,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-02T00:00:00Z'),
+    });
+    Object.assign(s, overrides);
+    return s;
+  }
+
+  function makePage(overrides: Partial<StoryPage> = {}): StoryPage {
+    const p = new StoryPage();
+    Object.assign(p, {
+      id: 'p-1',
+      storyId: 's-1',
+      pageNumber: 1,
+      title: null,
+      text: 'Once upon a time...',
+      imageUrl: 'https://cdn/page.jpg',
+      imagePublicId: 'pub-page-1',
+      imageStatus: IllustrationPageStatus.COMPLETED,
+      sceneDescription: null,
+      location: null,
+      imagePrompt: 'a prompt',
+      imageError: null,
+    });
+    Object.assign(p, overrides);
+    return p;
+  }
+
+  beforeEach(async () => {
+    qb = makeQb({});
+    storyRepo = { createQueryBuilder: jest.fn(() => qb), findOne: jest.fn(), create: jest.fn(), save: jest.fn(), delete: jest.fn() };
+    pageRepo = { find: jest.fn(), delete: jest.fn(), create: jest.fn(), save: jest.fn() };
+    userRepo = { findOne: jest.fn() };
+    manager = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        delete: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue(undefined),
+      }),
+    };
+    dataSource = { transaction: jest.fn(async (cb) => cb(manager)) };
+    accessService = { requireAccess: jest.fn(), requireOwnership: jest.fn(), canAccessStory: jest.fn() };
+    statusService = {
+      computeStatus: jest.fn().mockReturnValue({
+        status: 'COMPLETED',
+        totalPages: 1,
+        pending: 0,
+        queued: 0,
+        generating: 0,
+        uploading: 0,
+        completed: 1,
+        failed: 0,
+        progress: 100,
+      }),
+    };
+    cloudinary = { deleteImage: jest.fn().mockResolvedValue(undefined), uploadImage: jest.fn() };
+    cache = { bust: jest.fn().mockResolvedValue(undefined) };
+    parser = { parse: jest.fn().mockReturnValue({ title: 'T', language: 'en', sections: [] }) };
+    pdfParser = { extractText: jest.fn() };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        StoryService,
+        { provide: getRepositoryToken(Story), useValue: storyRepo },
+        { provide: getRepositoryToken(StoryPage), useValue: pageRepo },
+        { provide: getRepositoryToken(StoryShare), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: userRepo },
+        { provide: getRepositoryToken(Notification), useValue: {} },
+        { provide: getDataSourceToken(), useValue: dataSource },
+        { provide: StoryParserService, useValue: parser },
+        { provide: PdfParserService, useValue: pdfParser },
+        { provide: StoryAccessService, useValue: accessService },
+        { provide: IllustrationStatusService, useValue: statusService },
+        { provide: CloudinaryService, useValue: cloudinary },
+        { provide: PublicCacheService, useValue: cache },
+      ],
+    }).compile();
+
+    service = module.get(StoryService);
+  });
+
+  describe('findOne access control', () => {
+    it('returns safe details for an owner', async () => {
+      const story = makeStory();
+      accessService.requireAccess.mockResolvedValue(story);
+      pageRepo.find.mockResolvedValue([makePage()]);
+      userRepo.findOne.mockResolvedValue({
+        id: 'u-1',
+        firstName: 'Ahmed',
+        lastName: 'Ali',
+        name: 'Ahmed Ali',
+        avatarUrl: 'https://cdn/avatar.jpg',
+      });
+
+      const result = await service.findOne('u-1', 's-1');
+
+      expect(accessService.requireAccess).toHaveBeenCalledWith('s-1', 'u-1');
+      expect(result.author).toEqual({ id: 'u-1', name: 'Ahmed Ali', avatarUrl: 'https://cdn/avatar.jpg' });
+      expect(result.stats).toMatchObject({ totalPages: 1, illustratedPages: 1, failedPages: 0, progress: 100 });
+      expect(result.pages[0]).toMatchObject({
+        id: 'p-1',
+        pageNumber: 1,
+        text: 'Once upon a time...',
+        imageUrl: 'https://cdn/page.jpg',
+      });
+      // Sensitive internals must not leak
+      expect(result.pages[0]).not.toHaveProperty('imagePrompt');
+      expect(result.pages[0]).not.toHaveProperty('imageError');
+      expect(result.pages[0]).not.toHaveProperty('imagePublicId');
+      expect(result).not.toHaveProperty('originalText');
+    });
+
+    it('allows guest access to a PUBLIC story', async () => {
+      accessService.requireAccess.mockResolvedValue(makeStory({ visibility: StoryVisibility.PUBLIC }));
+      pageRepo.find.mockResolvedValue([]);
+      userRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.findOne(undefined, 's-1');
+
+      expect(accessService.requireAccess).toHaveBeenCalledWith('s-1', undefined);
+      expect(result.author.id).toBe('u-1');
+      expect(result.pages).toEqual([]);
+    });
+
+    it('rethrows Forbidden when access is denied', async () => {
+      accessService.requireAccess.mockRejectedValue(new ForbiddenException('Access denied'));
+
+      await expect(service.findOne('u-2', 's-1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('maps failed pages into stats', async () => {
+      accessService.requireAccess.mockResolvedValue(makeStory());
+      pageRepo.find.mockResolvedValue([
+        makePage({ id: 'p-ok', imageStatus: IllustrationPageStatus.COMPLETED }),
+        makePage({ id: 'p-fail', imageStatus: IllustrationPageStatus.FAILED }),
+      ]);
+      statusService.computeStatus.mockReturnValue({
+        status: 'PARTIALLY_FAILED',
+        totalPages: 2,
+        pending: 0,
+        queued: 0,
+        generating: 0,
+        uploading: 0,
+        completed: 1,
+        failed: 1,
+        progress: 50,
+      });
+      userRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.findOne('u-1', 's-1');
+
+      expect(result.stats.failedPages).toBe(1);
+      expect(result.stats.illustratedPages).toBe(1);
+    });
+  });
+
+  describe('remove cleanup', () => {
+    it('deletes shares, story notifications, pages, story, then Cloudinary images', async () => {
+      const story = makeStory();
+      story.pages = [
+        makePage(),
+        makePage({ id: 'p-2', imagePublicId: null }),
+      ];
+      storyRepo.findOne.mockResolvedValue(story);
+
+      await service.remove('u-1', 's-1');
+
+      expect(storyRepo.findOne).toHaveBeenCalledWith({ where: { id: 's-1' }, relations: { pages: true } });
+      expect(cloudinary.deleteImage).toHaveBeenCalledWith('pub-page-1');
+      expect(cloudinary.deleteImage).not.toHaveBeenCalledWith(null);
+      expect(cache.bust).toHaveBeenCalled();
+    });
+
+    it('throws Forbidden for non-owner deletion', async () => {
+      storyRepo.findOne.mockResolvedValue(makeStory());
+      await expect(service.remove('u-2', 's-1')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws NotFound when story is missing', async () => {
+      storyRepo.findOne.mockResolvedValue(null);
+      await expect(service.remove('u-1', 'nope')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findAll', () => {
+    it('applies visibility filter and updated sort', async () => {
+      qb.getManyAndCount.mockResolvedValue([[makeStory()], 1]);
+
+      await service.findAll('u-1', {
+        visibility: StoryVisibility.PUBLIC,
+        sort: 'updated',
+        page: 1,
+        limit: 10,
+      } as any);
+
+      expect(qb.andWhere).toHaveBeenCalledWith('story.visibility = :visibility', {
+        visibility: StoryVisibility.PUBLIC,
+      });
+      expect(qb.orderBy).toHaveBeenCalledWith('story.updatedAt', 'DESC');
+    });
+
+    it('defaults to latest (createdAt desc) sort', async () => {
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findAll('u-1', { page: 1, limit: 10 } as any);
+
+      expect(qb.orderBy).toHaveBeenCalledWith('story.createdAt', 'DESC');
+    });
+  });
+
+  describe('create', () => {
+    it('busts the public cache after creation', async () => {
+      parser.parse.mockReturnValue({ title: 'T', language: 'en', sections: [{ order: 1, text: 'x' }] });
+      storyRepo.create.mockReturnValue(makeStory());
+      storyRepo.save.mockResolvedValue(makeStory());
+      pageRepo.save.mockResolvedValue([]);
+
+      await service.create('u-1', { title: 'T', text: 'x' } as any);
+
+      expect(cache.bust).toHaveBeenCalled();
+    });
+  });
+});

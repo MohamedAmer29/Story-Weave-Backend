@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Story } from '../../../database/entities/story.entity';
@@ -18,7 +22,9 @@ export class StoryAccessService {
     storyId: string,
     userId?: string,
   ): Promise<{ story: Story; canAccess: boolean }> {
-    const story = await this.storyRepository.findOne({ where: { id: storyId } });
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+    });
 
     if (!story) {
       throw new NotFoundException('Story not found');
@@ -67,7 +73,9 @@ export class StoryAccessService {
   }
 
   async requireOwnership(storyId: string, userId: string): Promise<Story> {
-    const story = await this.storyRepository.findOne({ where: { id: storyId } });
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+    });
 
     if (!story) {
       throw new NotFoundException('Story not found');

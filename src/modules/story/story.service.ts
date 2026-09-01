@@ -5,11 +5,13 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
 import { StoryShare } from '../../database/entities/story-share.entity';
+import { User } from '../../database/entities/user.entity';
+import { Notification } from '../../notifications/notification.entity';
 import { StoryStatus } from '../../common/enums/story-status.enum';
 import { SourceType } from '../../common/enums/source-type.enum';
 import { PageStatus } from '../../common/enums/page-status.enum';
@@ -21,11 +23,16 @@ import {
   StoryResponseDto,
   PaginatedStoriesResponseDto,
 } from './dto/story-response.dto';
+import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
 import {
   StoryParserService,
   ParsedStory,
 } from './services/story-parser.service';
 import { PdfParserService } from './services/pdf-parser.service';
+import { StoryAccessService } from './services/story-access.service';
+import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
+import { CloudinaryService } from '../../cloudinary/cloudinary.service';
+import { PublicCacheService } from '../../common/services/public-cache.service';
 
 @Injectable()
 export class StoryService {
@@ -36,10 +43,16 @@ export class StoryService {
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
     private readonly storyPageRepository: Repository<StoryPage>,
-    @InjectRepository(StoryShare)
-    private readonly storyShareRepository: Repository<StoryShare>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly storyParserService: StoryParserService,
     private readonly pdfParserService: PdfParserService,
+    private readonly storyAccessService: StoryAccessService,
+    private readonly illustrationStatusService: IllustrationStatusService,
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly publicCacheService: PublicCacheService,
   ) {}
 
   async create(
@@ -62,6 +75,7 @@ export class StoryService {
       status: StoryStatus.PROCESSING,
       visibility: createStoryDto.visibility || StoryVisibility.PRIVATE,
       language: createStoryDto.language || parsedStory.language,
+      visualStyle: createStoryDto.visualStyle,
     });
 
     await this.storyRepository.save(story);
@@ -80,6 +94,8 @@ export class StoryService {
       await this.storyRepository.save(story);
     }
 
+    await this.publicCacheService.bust();
+
     return this.toResponseDto(story);
   }
 
@@ -89,7 +105,15 @@ export class StoryService {
   ): Promise<PaginatedStoriesResponseDto> {
     this.logger.log(`Finding stories for user: ${userId}`);
 
-    const { page = 1, limit = 10, search, status, sourceType } = queryDto;
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      sourceType,
+      visibility,
+      sort = 'latest',
+    } = queryDto;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.storyRepository
@@ -111,8 +135,23 @@ export class StoryService {
       queryBuilder.andWhere('story.sourceType = :sourceType', { sourceType });
     }
 
+    if (visibility) {
+      queryBuilder.andWhere('story.visibility = :visibility', { visibility });
+    }
+
+    switch (sort) {
+      case 'oldest':
+        queryBuilder.orderBy('story.createdAt', 'ASC');
+        break;
+      case 'updated':
+        queryBuilder.orderBy('story.updatedAt', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('story.createdAt', 'DESC');
+        break;
+    }
+
     const [stories, total] = await queryBuilder
-      .orderBy('story.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();
@@ -130,23 +169,75 @@ export class StoryService {
     };
   }
 
-  async findOne(userId: string, id: string): Promise<StoryResponseDto> {
-    this.logger.log(`Finding story: ${id} for user: ${userId}`);
+  async findOne(
+    userId: string | undefined,
+    id: string,
+  ): Promise<StoryDetailsResponseDto> {
+    this.logger.log(`Finding story: ${id}`);
 
-    const story = await this.storyRepository.findOne({
-      where: { id },
-      relations: { pages: true },
+    // Enforces PUBLIC / PRIVATE (owner) / SHARED (explicit grant) access rules.
+    const story = await this.storyAccessService.requireAccess(id, userId);
+
+    const pages = await this.storyPageRepository.find({
+      where: { storyId: id },
+      order: { pageNumber: 'ASC' },
     });
 
-    if (!story) {
-      throw new NotFoundException('Story not found');
+    let author: StoryDetailsResponseDto['author'] = {
+      id: story.userId,
+      name: 'Unknown author',
+      avatarUrl: null,
+    };
+    const user = await this.userRepository.findOne({
+      where: { id: story.userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        name: true,
+        avatarUrl: true,
+      },
+    });
+    if (user) {
+      author = {
+        id: user.id,
+        name: user.name || `${user.firstName} ${user.lastName}`.trim(),
+        avatarUrl: user.avatarUrl ?? null,
+      };
     }
 
-    if (story.userId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    const status = this.illustrationStatusService.computeStatus(pages);
 
-    return this.toResponseDto(story);
+    return {
+      id: story.id,
+      title: story.title,
+      description: story.description ?? null,
+      visibility: story.visibility,
+      status: story.status,
+      sourceType: story.sourceType,
+      language: story.language ?? null,
+      author,
+      stats: {
+        totalPages: status.totalPages,
+        illustratedPages: status.completed,
+        failedPages: status.failed,
+        pendingPages:
+          status.pending + status.queued + status.generating + status.uploading,
+        progress: status.progress,
+      },
+      pages: pages.map((page) => ({
+        id: page.id,
+        pageNumber: page.pageNumber,
+        title: page.title ?? null,
+        text: page.text,
+        sceneDescription: page.sceneDescription ?? null,
+        location: page.location ?? null,
+        imageUrl: page.imageUrl ?? null,
+        imageStatus: page.imageStatus ?? null,
+      })),
+      createdAt: story.createdAt,
+      updatedAt: story.updatedAt,
+    };
   }
 
   async update(
@@ -169,13 +260,18 @@ export class StoryService {
     Object.assign(story, updateStoryDto);
     await this.storyRepository.save(story);
 
+    await this.publicCacheService.bust();
+
     return this.toResponseDto(story);
   }
 
   async remove(userId: string, id: string): Promise<void> {
     this.logger.log(`Deleting story: ${id} for user: ${userId}`);
 
-    const story = await this.storyRepository.findOne({ where: { id } });
+    const story = await this.storyRepository.findOne({
+      where: { id },
+      relations: { pages: true },
+    });
 
     if (!story) {
       throw new NotFoundException('Story not found');
@@ -185,8 +281,52 @@ export class StoryService {
       throw new ForbiddenException('Access denied');
     }
 
-    await this.storyPageRepository.delete({ storyId: id });
-    await this.storyRepository.delete(id);
+    const imagePublicIds = story.pages
+      .map((page) => page.imagePublicId)
+      .filter((pid): pid is string => Boolean(pid));
+
+    // Database consistency first: shares, notifications, pages, then the story.
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(StoryShare, { storyId: id });
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Notification)
+        .where("data->>'storyId' = :storyId", { storyId: id })
+        .execute();
+      await manager.delete(StoryPage, { storyId: id });
+      await manager.delete(Story, id);
+    });
+
+    await this.publicCacheService.bust();
+
+    // Best-effort Cloudinary cleanup AFTER the DB operation committed.
+    for (const publicId of imagePublicIds) {
+      await this.cloudinaryService.deleteImage(publicId);
+    }
+
+    this.logger.log(`Story deleted: ${id}`);
+  }
+
+  async getPagesForUser(storyId: string, userId: string): Promise<StoryPage[]> {
+    this.logger.log(`Getting pages for story: ${storyId} for user: ${userId}`);
+
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+    });
+
+    if (!story) {
+      throw new NotFoundException('Story not found');
+    }
+
+    if (story.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return this.storyPageRepository.find({
+      where: { storyId },
+      order: { pageNumber: 'ASC' },
+    });
   }
 
   async createFromPdf(
@@ -243,6 +383,8 @@ export class StoryService {
         story.errorMessage = 'Failed to process story content';
         await this.storyRepository.save(story);
       }
+
+      await this.publicCacheService.bust();
 
       return this.toResponseDto(story);
     } catch (error) {

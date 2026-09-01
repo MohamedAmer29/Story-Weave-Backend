@@ -16,7 +16,9 @@ export class PdfParserService {
         throw new BadRequestException('PDF contains no extractable text');
       }
 
-      this.logger.log(`PDF text extracted successfully, length: ${data.text.length} characters`);
+      this.logger.log(
+        `PDF text extracted successfully, length: ${data.text.length} characters`,
+      );
       this.logger.debug(`Number of pages: ${data.numpages}`);
 
       return this.normalizeText(data.text);

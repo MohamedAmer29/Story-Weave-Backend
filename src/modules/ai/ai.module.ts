@@ -12,6 +12,6 @@ import { RedisService } from '../../config/redis.service';
   imports: [HttpModule, ConfigModule],
   controllers: [AIController],
   providers: [AIService, CloudflareProvider, AiUsageService, RedisService],
-  exports: [AIService, AiUsageService],
+  exports: [AIService, AiUsageService, CloudflareProvider],
 })
 export class AIModule {}

@@ -120,6 +120,14 @@ export class UsersService {
       throw new BadRequestException('Avatar image exceeds 5MB limit');
     }
 
+    // Verify the magic bytes match the declared MIME type (defense in depth,
+    // since the browser-supplied mimetype can be forged).
+    if (!this.hasValidImageSignature(file.buffer, file.mimetype)) {
+      throw new BadRequestException(
+        'Invalid image file. File contents do not match the declared type.',
+      );
+    }
+
     const user = await this.userRepository.findOne({
       where: { id: userId },
     });
@@ -151,6 +159,42 @@ export class UsersService {
       avatarUrl: upload.secureUrl,
       avatarPublicId: upload.publicId,
     };
+  }
+
+  private hasValidImageSignature(
+    buffer: Buffer,
+    mimeType: string,
+  ): boolean {
+    if (!buffer || buffer.length < 12) {
+      return false;
+    }
+    switch (mimeType) {
+      case 'image/jpeg':
+        return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+      case 'image/png':
+        return (
+          buffer[0] === 0x89 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x4e &&
+          buffer[3] === 0x47
+        );
+      case 'image/gif':
+        return (
+          (buffer[0] === 0x47 &&
+            buffer[1] === 0x49 &&
+            buffer[2] === 0x46 &&
+            buffer[3] === 0x38) &&
+          (buffer[4] === 0x37 || buffer[4] === 0x39) &&
+          buffer[5] === 0x61
+        );
+      case 'image/webp':
+        return (
+          buffer.toString('ascii', 0, 4) === 'RIFF' &&
+          buffer.toString('ascii', 8, 12) === 'WEBP'
+        );
+      default:
+        return false;
+    }
   }
 
   async getStats(userId: string): Promise<UserStatistics> {

@@ -13,6 +13,7 @@ import { AIService } from './ai.service';
 import { AiUsageService } from '../../ai/ai-usage.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { TestImageDto } from './dto/test-image.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
@@ -27,6 +28,7 @@ export class AIController {
 
   @Post('test-image')
   @Public()
+  @RateLimit({ ttl: 60, limit: 5 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate a test image (development only)' })
   async testImage(@Body() body: TestImageDto) {

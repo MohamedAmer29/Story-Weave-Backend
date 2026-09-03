@@ -147,10 +147,16 @@ describe('UsersService', () => {
   });
 
   describe('updateAvatar', () => {
+    // Realistic PNG payload: valid 8-byte PNG signature followed by padding,
+    // so the magic-byte verification in the service accepts it.
+    const pngBuffer = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(16, 0),
+    ]);
     const validFile = {
       mimetype: 'image/png',
       size: 1024,
-      buffer: Buffer.from('png'),
+      buffer: pngBuffer,
     } as Express.Multer.File;
 
     it('rejects when no file provided', async () => {
@@ -171,6 +177,17 @@ describe('UsersService', () => {
     it('rejects oversized images', async () => {
       const big = { ...validFile, size: 6 * 1024 * 1024 } as any;
       await expect(service.updateAvatar('u-1', big)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('rejects payloads whose bytes do not match the declared MIME type', async () => {
+      const forged = {
+        mimetype: 'image/png',
+        size: 1024,
+        buffer: Buffer.from('plain text that is not a png'),
+      } as Express.Multer.File;
+      await expect(service.updateAvatar('u-1', forged)).rejects.toThrow(
         BadRequestException,
       );
     });

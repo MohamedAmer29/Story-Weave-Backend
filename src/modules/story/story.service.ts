@@ -330,16 +330,13 @@ export class StoryService {
     // Enforces PUBLIC / PRIVATE (owner) / SHARED (explicit grant) access rules.
     const story = await this.storyAccessService.requireAccess(id, userId);
 
+    // Fetch pages with ordering using the new composite index
     const pages = await this.storyPageRepository.find({
       where: { storyId: id },
       order: { pageNumber: 'ASC' },
     });
 
-    let author: StoryDetailsResponseDto['author'] = {
-      id: story.userId,
-      name: 'Unknown author',
-      avatarUrl: null,
-    };
+    // Fetch author data in a single query with projection
     const user = await this.userRepository.findOne({
       where: { id: story.userId },
       select: {
@@ -350,13 +347,18 @@ export class StoryService {
         avatarUrl: true,
       },
     });
-    if (user) {
-      author = {
-        id: user.id,
-        name: user.name || `${user.firstName} ${user.lastName}`.trim(),
-        avatarUrl: user.avatarUrl ?? null,
-      };
-    }
+
+    const author: StoryDetailsResponseDto['author'] = user
+      ? {
+          id: user.id,
+          name: user.name || `${user.firstName} ${user.lastName}`.trim(),
+          avatarUrl: user.avatarUrl ?? null,
+        }
+      : {
+          id: story.userId,
+          name: 'Unknown author',
+          avatarUrl: null,
+        };
 
     const status = this.illustrationStatusService.computeStatus(pages);
 

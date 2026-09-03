@@ -28,12 +28,14 @@ import { StoryPage } from './database/entities/story-page.entity';
 import { StoryShare } from './database/entities/story-share.entity';
 import { RefreshToken } from './database/entities/refresh-token.entity';
 import { Notification } from './notifications/notification.entity';
+import { AuditLog } from './admin/entities/audit-log.entity';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -72,6 +74,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
           StoryShare,
           Notification,
           RefreshToken,
+          AuditLog,
         ],
         synchronize: configService.get<boolean>('database.synchronize', false),
         logging: configService.get<boolean>('database.logging', false),
@@ -86,6 +89,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     StoryModule,
     IllustrationModule,
     NotificationsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

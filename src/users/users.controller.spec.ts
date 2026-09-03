@@ -90,11 +90,14 @@ describe('UsersController', () => {
 
   it('getPublicProfile returns a public author profile', async () => {
     service.getPublicProfile.mockResolvedValue({ id: 'u-1', name: 'Ahmed' });
-    const result = await controller.getPublicProfile('u-1');
+    const result = await controller.getPublicProfile({
+      userId: 'u-1',
+    } as any);
     expect(result).toEqual({
       success: true,
       data: { id: 'u-1', name: 'Ahmed' },
     });
+    expect(service.getPublicProfile).toHaveBeenCalledWith('u-1');
   });
 
   it('getPublicStories returns public stories for an author', async () => {
@@ -102,10 +105,13 @@ describe('UsersController', () => {
       data: [],
       meta: { total: 0 },
     });
-    const result = await controller.getPublicStories('u-1', {
-      page: 1,
-      limit: 12,
-    } as any);
+    const result = await controller.getPublicStories(
+      { userId: 'u-1' } as any,
+      {
+        page: 1,
+        limit: 12,
+      } as any,
+    );
     expect(result).toEqual({ success: true, data: [], meta: { total: 0 } });
     expect(service.getPublicStories).toHaveBeenCalledWith('u-1', {
       page: 1,

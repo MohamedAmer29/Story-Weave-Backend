@@ -40,10 +40,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Account is unavailable');
     }
 
+    // Re-read the role/email from the DB rather than trusting the (potentially
+    // stale) values embedded in the token. This ensures a demoted admin or a
+    // changed email takes effect immediately instead of waiting for token expiry.
     return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
+      id: user.id,
+      email: user.email,
+      role: user.role,
       sessionId: payload.sessionId,
     };
   }

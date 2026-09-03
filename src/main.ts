@@ -6,8 +6,12 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { validateEnvironment } from './config/env.validation';
 
 async function bootstrap() {
+  validateEnvironment();
+
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
@@ -19,10 +23,13 @@ async function bootstrap() {
     'http://localhost:5173',
   ]);
   const corsCredentials = configService.get<boolean>('cors.credentials', true);
+  const isProduction = configService.get<string>('app.environment') === 'production';
 
   app.setGlobalPrefix(apiPrefix);
 
   app.use(cookieParser());
+
+  app.use(new RequestIdMiddleware().use);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -45,16 +52,35 @@ async function bootstrap() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (isProduction) {
+      res.setHeader(
+        'Strict-Transport-Security',
+        'max-age=15552000; includeSubDomains; preload',
+      );
+    }
     next();
   });
 
   // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('AI Stories API')
-    .setDescription('AI-powered illustrated story platform API')
+    .setDescription(
+      'AI-powered illustrated story platform API\n\n' +
+        'Every response includes an `x-request-id` correlation header that can be ' +
+        'supplied by clients (and is echoed in error payloads) for tracing.',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .addCookieAuth('refresh_token')
+    .addGlobalParameters({
+      name: 'x-request-id',
+      in: 'header',
+      required: false,
+      schema: { type: 'string' },
+      description: 'Optional correlation ID for request tracing',
+    })
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
@@ -72,7 +98,9 @@ async function bootstrap() {
   if (corsEnabled) {
     app.enableCors({
       origin: corsOrigin,
+      methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       credentials: corsCredentials,
+      exposedHeaders: ['x-request-id', 'Content-Disposition'],
     });
   }
 

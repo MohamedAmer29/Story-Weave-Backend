@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { Story } from './story.entity';
 import { RefreshToken } from './refresh-token.entity';
@@ -16,6 +17,9 @@ export enum UserRole {
 }
 
 @Entity('users')
+@Index('IDX_users_email', ['email'])
+@Index('IDX_users_role', ['role'])
+@Index('IDX_users_created_at', ['createdAt'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;

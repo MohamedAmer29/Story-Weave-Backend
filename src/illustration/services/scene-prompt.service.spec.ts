@@ -2,12 +2,16 @@ import { ScenePromptService } from './scene-prompt.service';
 import { GenreVisualStyleService } from './genre-visual-style.service';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
+import { StoryLanguage } from '../../common/enums/story-language.enum';
+import { StoryType } from '../../common/enums/story-type.enum';
 
 function makeStory(): Story {
   return Object.assign(new Story(), {
     id: 'story-id',
     title: 'The Magical Forest',
     visualStyle: null,
+    storyType: StoryType.FANTASY,
+    language: StoryLanguage.ENGLISH,
   });
 }
 
@@ -30,6 +34,87 @@ describe('ScenePromptService', () => {
   beforeEach(() => {
     genreService = { getVisualGuidance: jest.fn().mockReturnValue(null) };
     service = new ScenePromptService(genreService);
+  });
+
+  it('includes language-specific visual guidance for Arabic stories', () => {
+    const story = makeStory();
+    story.language = StoryLanguage.ARABIC;
+    const prompt = service.buildImagePrompt(story, makePage());
+    expect(prompt).toContain('Arabic/Middle-Eastern-inspired');
+  });
+
+  it('applies genre guidance when genre service returns a style', () => {
+    genreService.getVisualGuidance.mockReturnValue(
+      'magical atmosphere, enchanted landscapes',
+    );
+    const prompt = service.buildImagePrompt(makeStory(), makePage());
+    expect(prompt).toContain('magical atmosphere, enchanted landscapes');
+    expect(genreService.getVisualGuidance).toHaveBeenCalledWith(StoryType.FANTASY);
+  });
+
+  it('adds scene continuity referencing the previous page when multiple pages exist', () => {
+    const story = makeStory();
+    const page2 = makePage();
+    page2.id = 'page-2';
+    page2.pageNumber = 2;
+    page2.text = 'Then Ahmed climbed the tower.';
+    const page1 = makePage();
+    page1.id = 'page-1';
+    page1.pageNumber = 1;
+    page1.text = 'Ahmed found the glowing blue dragon in the forest.';
+
+    const prompt = service.buildImagePrompt(
+      story,
+      page2,
+      [page1, page2],
+    );
+    expect(prompt).toContain('Scene continuity');
+    expect(prompt).toContain('glowing blue dragon');
+  });
+
+  it('omits continuity for a single page story', () => {
+    const prompt = service.buildImagePrompt(makeStory(), makePage());
+    expect(prompt).not.toContain('Scene continuity');
+  });
+
+  it('builds a cover prompt with title and description', () => {
+    const story = makeStory();
+    story.description = 'A tale of friendship and courage.';
+    const prompt = service.buildCoverPrompt(story);
+    expect(prompt).toContain('book cover');
+    expect(prompt).toContain('The Magical Forest');
+    expect(prompt).toContain('A tale of friendship and courage.');
+  });
+
+  it('uses originalText snippet when cover has no description', () => {
+    const story = makeStory();
+    story.originalText = 'Once upon a time a young hero set out on a quest.';
+    const prompt = service.buildCoverPrompt(story);
+    expect(prompt).toContain('Story summary');
+    expect(prompt).toContain('Once upon a time');
+  });
+
+  it('enforces the 2000-character prompt limit', () => {
+    const story = makeStory();
+    story.visualStyle = 'x'.repeat(4000);
+    const prompt = service.buildImagePrompt(story, makePage());
+    expect(prompt.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('enforces the 2000-char limit on cover prompts too', () => {
+    const story = makeStory();
+    story.description = 'y'.repeat(4000);
+    const prompt = service.buildCoverPrompt(story);
+    expect(prompt.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('trims trailing punctuation from character descriptions', () => {
+    const page = makePage();
+    page.characterDescriptions = 'Ahmed: boy, brave. ';
+    const prompt = service.buildImagePrompt(makeStory(), page);
+    // trailing period and whitespace stripped from character descriptions
+    expect(prompt).toContain('Characters: Ahmed: boy, brave');
+    expect(prompt).not.toContain('brave. ');
   });
 
   it('builds a prompt from story and page details', () => {

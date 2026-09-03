@@ -10,7 +10,6 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
-  SetMetadata,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,9 +30,12 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
+import {
+  UuidParamDto,
+  SessionIdParamDto,
+} from '../common/dto/uuid-param.dto';
 import type { CookieOptions } from 'express';
-
-const RATE_LIMIT_KEY = 'rateLimit';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -87,7 +89,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @SetMetadata(RATE_LIMIT_KEY, { ttl: 300, limit: 5 })
+  @RateLimit({ ttl: 300, limit: 5 })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'Registration successful' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
@@ -115,7 +117,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @SetMetadata(RATE_LIMIT_KEY, { ttl: 900, limit: 10 })
+  @RateLimit({ ttl: 900, limit: 10 })
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
@@ -143,6 +145,7 @@ export class AuthController {
   @Public()
   @Post('refresh-token')
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ ttl: 300, limit: 30 })
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Token refreshed' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
@@ -209,7 +212,7 @@ export class AuthController {
   @Public()
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
-  @SetMetadata(RATE_LIMIT_KEY, { ttl: 300, limit: 10 })
+  @RateLimit({ ttl: 300, limit: 10 })
   @ApiOperation({ summary: 'Verify email with OTP' })
   @ApiResponse({ status: 200, description: 'Email verified' })
   @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
@@ -220,7 +223,7 @@ export class AuthController {
   @Public()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
-  @SetMetadata(RATE_LIMIT_KEY, { ttl: 60, limit: 3 })
+  @RateLimit({ ttl: 60, limit: 3 })
   @ApiOperation({ summary: 'Resend verification email' })
   @ApiResponse({ status: 200, description: 'If the account exists...' })
   async resendVerification(@Body() dto: ForgotPasswordDto) {
@@ -230,7 +233,7 @@ export class AuthController {
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @SetMetadata(RATE_LIMIT_KEY, { ttl: 300, limit: 3 })
+  @RateLimit({ ttl: 300, limit: 3 })
   @ApiOperation({ summary: 'Request password reset' })
   @ApiResponse({ status: 200, description: 'If the account exists...' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -240,7 +243,7 @@ export class AuthController {
   @Public()
   @Post('verify-reset-otp')
   @HttpCode(HttpStatus.OK)
-  @SetMetadata(RATE_LIMIT_KEY, { ttl: 300, limit: 10 })
+  @RateLimit({ ttl: 300, limit: 10 })
   @ApiOperation({ summary: 'Verify password reset OTP' })
   @ApiResponse({ status: 200, description: 'Reset token issued' })
   @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
@@ -251,6 +254,7 @@ export class AuthController {
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ ttl: 300, limit: 10 })
   @ApiOperation({ summary: 'Reset password with token' })
   @ApiResponse({ status: 200, description: 'Password reset successful' })
   @ApiResponse({ status: 401, description: 'Invalid or expired token' })
@@ -290,9 +294,9 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Session not found' })
   async revokeSession(
     @CurrentUser('id') userId: string,
-    @Param('sessionId') sessionId: string,
+    @Param() params: SessionIdParamDto,
   ) {
-    return this.authService.revokeSession(userId, sessionId);
+    return this.authService.revokeSession(userId, params.sessionId);
   }
 
   @Delete('sessions/others')

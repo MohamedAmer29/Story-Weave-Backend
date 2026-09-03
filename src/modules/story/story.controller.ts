@@ -12,8 +12,11 @@ import {
   HttpStatus,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Request } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -26,6 +29,9 @@ import { StoryService } from './story.service';
 import { StoryLibraryService } from './services/story-library.service';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
+import { UploadPdfDto } from './dto/upload-pdf.dto';
+import { ShareStoryDto } from './dto/share-story.dto';
+import { UpdateVisibilityDto } from './dto/update-visibility.dto';
 import { StoryQueryDto } from './dto/story-query.dto';
 import { StoryListQueryDto } from './dto/story-list-query.dto';
 import {
@@ -34,11 +40,15 @@ import {
 } from './dto/story-response.dto';
 import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
 import { StoryType } from '../../common/enums/story-type.enum';
-import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import { UuidParamDto, UuidTargetUserIdParamDto } from '../../common/dto/uuid-param.dto';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
+
+// Rate limit metadata key (used by the global RateLimitGuard)
+const RATE_LIMIT_KEY = 'rateLimit';
 
 @ApiTags('stories')
 @Controller('stories')
@@ -51,6 +61,7 @@ export class StoryController {
   ) {}
 
   @Post()
+  @RateLimit({ ttl: 300, limit: 30 })
   @ApiOperation({ summary: 'Create a new story' })
   @ApiResponse({ status: 201, type: StoryResponseDto })
   @ApiResponse({ status: 400, description: 'Bad Request' })
@@ -136,9 +147,9 @@ export class StoryController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   async findOne(
     @CurrentUser('id') userId: string | undefined,
-    @Param('id') id: string,
+    @Param() params: UuidParamDto,
   ): Promise<StoryDetailsResponseDto> {
-    return this.storyService.findOne(userId, id);
+    return this.storyService.findOne(userId, params.id);
   }
 
   @Patch(':id')
@@ -150,10 +161,10 @@ export class StoryController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   async update(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
+    @Param() params: UuidParamDto,
     @Body() updateStoryDto: UpdateStoryDto,
   ): Promise<StoryResponseDto> {
-    return this.storyService.update(userId, id, updateStoryDto);
+    return this.storyService.update(userId, params.id, updateStoryDto);
   }
 
   @Delete(':id')
@@ -165,9 +176,9 @@ export class StoryController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   async remove(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
+    @Param() params: UuidParamDto,
   ): Promise<void> {
-    return this.storyService.remove(userId, id);
+    return this.storyService.remove(userId, params.id);
   }
 
   @Patch(':id/visibility')
@@ -179,10 +190,10 @@ export class StoryController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   async updateVisibility(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
-    @Body() body: { visibility: StoryVisibility },
+    @Param() params: UuidParamDto,
+    @Body() body: UpdateVisibilityDto,
   ): Promise<StoryResponseDto> {
-    return this.storyService.updateVisibility(userId, id, body.visibility);
+    return this.storyService.updateVisibility(userId, params.id, body.visibility);
   }
 
   @Post(':id/share')
@@ -194,10 +205,10 @@ export class StoryController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   async shareStory(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
-    @Body() body: { userId: string },
+    @Param() params: UuidParamDto,
+    @Body() body: ShareStoryDto,
   ) {
-    return this.storyService.shareStory(userId, id, body.userId);
+    return this.storyService.shareStory(userId, params.id, body.userId);
   }
 
   @Delete(':id/share/:targetUserId')
@@ -209,10 +220,9 @@ export class StoryController {
   @ApiResponse({ status: 404, description: 'Not Found' })
   async removeShare(
     @CurrentUser('id') userId: string,
-    @Param('id') id: string,
-    @Param('targetUserId') targetUserId: string,
+    @Param() params: UuidTargetUserIdParamDto,
   ): Promise<void> {
-    return this.storyService.removeShare(userId, id, targetUserId);
+    return this.storyService.removeShare(userId, params.id, params.targetUserId);
   }
 
   @Get(':id/shares')
@@ -221,12 +231,33 @@ export class StoryController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Not Found' })
-  async listShares(@CurrentUser('id') userId: string, @Param('id') id: string) {
-    return this.storyService.listShares(userId, id);
+  async listShares(
+    @CurrentUser('id') userId: string,
+    @Param() params: UuidParamDto,
+  ) {
+    return this.storyService.listShares(userId, params.id);
   }
 
   @Post('upload-pdf')
-  @UseInterceptors(FileInterceptor('file'))
+  @RateLimit({ ttl: 300, limit: 10 })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+      fileFilter: (_req: Request, file, cb) => {
+        if (file.mimetype !== 'application/pdf') {
+          cb(
+            new BadRequestException(
+              'Invalid file type. Only PDF files are allowed',
+            ),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -260,7 +291,7 @@ export class StoryController {
   async uploadPdf(
     @CurrentUser('id') userId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { storyType?: any; visualStyle?: string; language?: string },
+    @Body() body: UploadPdfDto,
   ): Promise<StoryResponseDto> {
     return this.storyService.createFromPdf(userId, file, body);
   }

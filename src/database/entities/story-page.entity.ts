@@ -14,6 +14,7 @@ import { Story } from './story.entity';
 
 @Entity('story_pages')
 @Index('IDX_pages_story_image_status', ['storyId', 'imageStatus'])
+@Index('IDX_pages_story_page_number', ['storyId', 'pageNumber'])
 export class StoryPage {
   @PrimaryGeneratedColumn('uuid')
   id: string;

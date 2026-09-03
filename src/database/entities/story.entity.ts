@@ -24,6 +24,7 @@ import { StoryShare } from './story-share.entity';
 @Entity('stories')
 @Index('IDX_stories_user_visibility', ['userId', 'visibility'])
 @Index('IDX_stories_user_status', ['userId', 'status'])
+@Index('IDX_stories_language', ['language'])
 export class Story {
   @PrimaryGeneratedColumn('uuid')
   id: string;

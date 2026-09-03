@@ -23,6 +23,11 @@ import {
 import type { Express, Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
+import {
+  UuidParamDto,
+  UserIdParamDto,
+} from '../common/dto/uuid-param.dto';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { LibraryQueryDto } from './dto/library-query.dto';
@@ -64,6 +69,7 @@ export class UsersController {
 
   @Post('me/avatar')
   @ApiBearerAuth()
+  @RateLimit({ ttl: 300, limit: 10 })
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -146,8 +152,10 @@ export class UsersController {
   @ApiOperation({ summary: 'Get a public author profile' })
   @ApiResponse({ status: 200, description: 'Public author profile' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async getPublicProfile(@Param('userId') userId: string) {
-    const data = await this.usersService.getPublicProfile(userId);
+  async getPublicProfile(
+    @Param() params: UserIdParamDto,
+  ) {
+    const data = await this.usersService.getPublicProfile(params.userId);
     return { success: true, data };
   }
 
@@ -157,10 +165,13 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'Paginated public stories' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async getPublicStories(
-    @Param('userId') userId: string,
+    @Param() params: UserIdParamDto,
     @Query() query: StoryListQueryDto,
   ) {
-    const result = await this.usersService.getPublicStories(userId, query);
+    const result = await this.usersService.getPublicStories(
+      params.userId,
+      query,
+    );
     return { success: true, ...result };
   }
 }

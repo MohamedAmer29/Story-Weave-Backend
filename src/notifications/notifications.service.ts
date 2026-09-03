@@ -55,7 +55,10 @@ export class NotificationsService {
       .take(limit)
       .getManyAndCount();
 
-    const unreadCount = await this.getUnreadCount(userId);
+    // Use efficient COUNT query for unread count
+    const unreadCount = await this.notificationRepository.count({
+      where: { userId, isRead: false },
+    });
 
     const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
 

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TestImageDto {
@@ -8,5 +8,6 @@ export class TestImageDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(2000)
   prompt: string;
 }

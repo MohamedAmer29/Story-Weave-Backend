@@ -129,7 +129,9 @@ export class UsersController {
 
   @Get('me/shared-stories')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get stories explicitly shared with the current user' })
+  @ApiOperation({
+    summary: 'Get stories explicitly shared with the current user',
+  })
   @ApiResponse({ status: 200, description: 'Paginated shared stories' })
   async getSharedStories(
     @CurrentUser('id') userId: string,

@@ -73,13 +73,22 @@ describe('AuthController', () => {
 
       const res = mockRes();
       const result = await controller.register(
-        { firstName: 'Test', lastName: 'User', email: 'test@example.com', password: 'StrongPass123!' },
+        {
+          firstName: 'Test',
+          lastName: 'User',
+          email: 'test@example.com',
+          password: 'StrongPass123!',
+        },
         mockReq,
         res,
       );
 
       expect(authService.register).toHaveBeenCalled();
-      expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'rt', expect.any(Object));
+      expect(res.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        'rt',
+        expect.any(Object),
+      );
       expect(result.user).toBeDefined();
       expect(result.accessToken).toBe('token');
       expect(result).not.toHaveProperty('refreshToken');
@@ -114,11 +123,18 @@ describe('AuthController', () => {
         refreshToken: 'new-rt',
       });
 
-      const reqWithCookie = { ...mockReq, cookies: { refresh_token: 'old-rt' } };
+      const reqWithCookie = {
+        ...mockReq,
+        cookies: { refresh_token: 'old-rt' },
+      };
       const res = mockRes();
       const result = await controller.refreshToken(reqWithCookie, res);
 
-      expect(authService.refreshTokens).toHaveBeenCalledWith('old-rt', '127.0.0.1', 'TestAgent');
+      expect(authService.refreshTokens).toHaveBeenCalledWith(
+        'old-rt',
+        '127.0.0.1',
+        'TestAgent',
+      );
       expect(result.accessToken).toBe('new-token');
       expect(res.cookie).toHaveBeenCalled();
     });
@@ -132,7 +148,10 @@ describe('AuthController', () => {
       const result = await controller.logout(mockReq, res);
 
       expect(authService.logout).toHaveBeenCalled();
-      expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', expect.any(Object));
+      expect(res.clearCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.any(Object),
+      );
       expect(result.message).toContain('Logged out');
     });
   });

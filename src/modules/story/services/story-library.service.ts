@@ -56,11 +56,7 @@ export class StoryLibraryService {
   ): Promise<PaginatedLibraryResponseDto> {
     const qb = this.storyRepository
       .createQueryBuilder('story')
-      .innerJoin(
-        StoryShare,
-        'share',
-        'share.storyId = story.id',
-      )
+      .innerJoin(StoryShare, 'share', 'share.storyId = story.id')
       .where('share.userId = :userId', { userId })
       .andWhere('story.visibility != :privateVis', {
         privateVis: StoryVisibility.PRIVATE,
@@ -79,10 +75,11 @@ export class StoryLibraryService {
       filters.search ?? ''
     }|${filters.sort ?? DEFAULT_SORT}`;
 
-    const cached = await this.publicCacheService.get<PaginatedLibraryResponseDto>(
-      'public-stories',
-      cacheKey,
-    );
+    const cached =
+      await this.publicCacheService.get<PaginatedLibraryResponseDto>(
+        'public-stories',
+        cacheKey,
+      );
     if (cached) {
       return cached;
     }
@@ -104,7 +101,10 @@ export class StoryLibraryService {
     return result;
   }
 
-  async findRecent(userId: string, limit: number): Promise<StoryLibraryItemDto[]> {
+  async findRecent(
+    userId: string,
+    limit: number,
+  ): Promise<StoryLibraryItemDto[]> {
     const stories = await this.storyRepository
       .createQueryBuilder('story')
       .where('story.userId = :userId', { userId })
@@ -115,7 +115,10 @@ export class StoryLibraryService {
     return this.attachSummaries(stories);
   }
 
-  private applyFilters(qb: SelectQueryBuilder<Story>, filters: StoryListFilters): void {
+  private applyFilters(
+    qb: SelectQueryBuilder<Story>,
+    filters: StoryListFilters,
+  ): void {
     this.applySortAndSearch(qb, filters);
 
     if (filters.status) {
@@ -168,10 +171,7 @@ export class StoryLibraryService {
     const limit = filters.limit;
     const skip = (page - 1) * limit;
 
-    const [stories, total] = await qb
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    const [stories, total] = await qb.skip(skip).take(limit).getManyAndCount();
 
     const data = await this.attachSummaries(stories);
 

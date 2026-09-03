@@ -44,8 +44,10 @@ export class AuthController {
   ) {}
 
   private isProduction(): boolean {
-    return this.configService.get<string>('app.environment', 'development') ===
-      'production';
+    return (
+      this.configService.get<string>('app.environment', 'development') ===
+      'production'
+    );
   }
 
   private baseCookieOptions(): CookieOptions {
@@ -168,10 +170,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout current session' })
   @ApiResponse({ status: 200, description: 'Logged out' })
-  async logout(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const refreshToken = this.extractRefreshToken(req);
     await this.authService.logout(refreshToken);
 
@@ -277,10 +276,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List active sessions' })
   @ApiResponse({ status: 200, description: 'List of sessions' })
-  async getSessions(
-    @CurrentUser('id') userId: string,
-    @Req() req: Request,
-  ) {
+  async getSessions(@CurrentUser('id') userId: string, @Req() req: Request) {
     const currentSessionId = (req as any).user?.sessionId;
     return this.authService.getSessions(userId, currentSessionId);
   }

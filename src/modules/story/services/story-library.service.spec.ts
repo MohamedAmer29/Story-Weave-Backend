@@ -65,9 +65,15 @@ describe('StoryLibraryService', () => {
   beforeEach(async () => {
     qb = makeQb({});
     pageQb = makeQb({});
-    storyRepo = { createQueryBuilder: jest.fn().mockReturnValue(qb), findOne: jest.fn() };
+    storyRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(qb),
+      findOne: jest.fn(),
+    };
     pageRepo = { createQueryBuilder: jest.fn().mockReturnValue(pageQb) };
-    cache = { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(undefined) };
+    cache = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -103,17 +109,32 @@ describe('StoryLibraryService', () => {
         sort: 'latest',
       });
 
-      expect(qb.where).toHaveBeenCalledWith('story.userId = :userId', { userId: 'u-1' });
+      expect(qb.where).toHaveBeenCalledWith('story.userId = :userId', {
+        userId: 'u-1',
+      });
       expect(qb.andWhere).toHaveBeenCalledWith(
         '(story.title ILIKE :search OR story.description ILIKE :search)',
         { search: '%forest%' },
       );
-      expect(qb.andWhere).toHaveBeenCalledWith('story.status = :status', { status: StoryStatus.READY });
-      expect(qb.andWhere).toHaveBeenCalledWith('story.visibility = :visibility', { visibility: StoryVisibility.PUBLIC });
-      expect(qb.andWhere).toHaveBeenCalledWith('story.sourceType = :sourceType', { sourceType: SourceType.TEXT });
+      expect(qb.andWhere).toHaveBeenCalledWith('story.status = :status', {
+        status: StoryStatus.READY,
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'story.visibility = :visibility',
+        { visibility: StoryVisibility.PUBLIC },
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'story.sourceType = :sourceType',
+        { sourceType: SourceType.TEXT },
+      );
       expect(qb.orderBy).toHaveBeenCalledWith('story.createdAt', 'DESC');
 
-      expect(result.meta).toEqual({ page: 1, limit: 10, total: 1, totalPages: 1 });
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+      });
       expect(result.data[0]).toMatchObject({
         id: 's-1',
         coverImageUrl: 'https://cdn/cover.jpg',
@@ -125,16 +146,28 @@ describe('StoryLibraryService', () => {
 
   describe('findShared', () => {
     it('joins shares and excludes private stories', async () => {
-      const shared = makeStory({ visibility: StoryVisibility.SHARED, id: 's-shared' });
+      const shared = makeStory({
+        visibility: StoryVisibility.SHARED,
+        id: 's-shared',
+      });
       qb.getManyAndCount.mockResolvedValue([[shared], 1]);
 
       const result = await service.findShared('u-2', { page: 1, limit: 10 });
 
-      expect(qb.innerJoin).toHaveBeenCalledWith(StoryShare, 'share', 'share.storyId = story.id');
-      expect(qb.where).toHaveBeenCalledWith('share.userId = :userId', { userId: 'u-2' });
-      expect(qb.andWhere).toHaveBeenCalledWith('story.visibility != :privateVis', {
-        privateVis: StoryVisibility.PRIVATE,
+      expect(qb.innerJoin).toHaveBeenCalledWith(
+        StoryShare,
+        'share',
+        'share.storyId = story.id',
+      );
+      expect(qb.where).toHaveBeenCalledWith('share.userId = :userId', {
+        userId: 'u-2',
       });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'story.visibility != :privateVis',
+        {
+          privateVis: StoryVisibility.PRIVATE,
+        },
+      );
       expect(result.data).toHaveLength(1);
     });
   });
@@ -144,9 +177,15 @@ describe('StoryLibraryService', () => {
       const story = makeStory();
       qb.getManyAndCount.mockResolvedValue([[story], 1]);
 
-      const result = await service.findPublic({ page: 1, limit: 10, search: 'magic' });
+      const result = await service.findPublic({
+        page: 1,
+        limit: 10,
+        search: 'magic',
+      });
 
-      expect(qb.where).toHaveBeenCalledWith('story.visibility = :vis', { vis: StoryVisibility.PUBLIC });
+      expect(qb.where).toHaveBeenCalledWith('story.visibility = :vis', {
+        vis: StoryVisibility.PUBLIC,
+      });
       expect(result.data[0].id).toBe('s-1');
       expect(cache.set).toHaveBeenCalled();
     });
@@ -156,8 +195,12 @@ describe('StoryLibraryService', () => {
 
       await service.findPublic({ page: 1, limit: 10 }, 'u-author');
 
-      expect(qb.where).toHaveBeenCalledWith('story.visibility = :vis', { vis: StoryVisibility.PUBLIC });
-      expect(qb.andWhere).toHaveBeenCalledWith('story.userId = :authorId', { authorId: 'u-author' });
+      expect(qb.where).toHaveBeenCalledWith('story.visibility = :vis', {
+        vis: StoryVisibility.PUBLIC,
+      });
+      expect(qb.andWhere).toHaveBeenCalledWith('story.userId = :authorId', {
+        authorId: 'u-author',
+      });
     });
 
     it('returns cached response without hitting the database', async () => {
@@ -221,10 +264,15 @@ describe('StoryLibraryService', () => {
       expect(result[0].coverImageUrl).toBe('https://cdn/cover.jpg');
 
       const coversQb = pageRepo.createQueryBuilder.mock.results[1].value;
-      expect(coversQb.andWhere).toHaveBeenCalledWith('page.imageStatus = :completed', {
-        completed: IllustrationPageStatus.COMPLETED,
-      });
-      expect(coversQb.andWhere).toHaveBeenCalledWith('page.imageUrl IS NOT NULL');
+      expect(coversQb.andWhere).toHaveBeenCalledWith(
+        'page.imageStatus = :completed',
+        {
+          completed: IllustrationPageStatus.COMPLETED,
+        },
+      );
+      expect(coversQb.andWhere).toHaveBeenCalledWith(
+        'page.imageUrl IS NOT NULL',
+      );
     });
   });
 });

@@ -63,7 +63,16 @@ describe('IllustrationService', () => {
   }
 
   beforeEach(async () => {
-    storyRepo = { findOne: jest.fn(), save: jest.fn() };
+    storyRepo = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      }),
+    };
     pageRepo = { findOne: jest.fn(), save: jest.fn(), find: jest.fn() };
     queue = { add: jest.fn().mockResolvedValue({ id: 'job' }) };
 
@@ -84,7 +93,10 @@ describe('IllustrationService', () => {
         },
         {
           provide: ScenePromptService,
-          useValue: { buildImagePrompt: jest.fn().mockReturnValue('prompt') },
+          useValue: {
+            buildImagePrompt: jest.fn().mockReturnValue('prompt'),
+            buildCoverPrompt: jest.fn().mockReturnValue('cover prompt'),
+          },
         },
         {
           provide: IllustrationStatusService,
@@ -120,14 +132,14 @@ describe('IllustrationService', () => {
         {},
       );
 
-      expect(result.queuedPages).toBe(2);
+      expect(result.queuedPages).toBe(3);
       expect(result.totalPages).toBe(2);
-      expect(queue.add).toHaveBeenCalledTimes(2);
+      expect(queue.add).toHaveBeenCalledTimes(3);
       expect(queue.add).toHaveBeenCalledWith(
         'illustrate-page',
         expect.any(Object),
         {
-          jobId: `${ILLUSTRATION_JOB_PREFIX}-page-1`,
+          jobId: expect.stringContaining(`${ILLUSTRATION_JOB_PREFIX}-page-1-`),
         },
       );
     });
@@ -150,8 +162,8 @@ describe('IllustrationService', () => {
         {},
       );
 
-      expect(result.queuedPages).toBe(1);
-      expect(queue.add).toHaveBeenCalledTimes(1);
+      expect(result.queuedPages).toBe(2);
+      expect(queue.add).toHaveBeenCalledTimes(2);
     });
 
     it('skips completed pages unless regenerate is requested', async () => {
@@ -176,7 +188,7 @@ describe('IllustrationService', () => {
         'story-1',
         {},
       );
-      expect(result.queuedPages).toBe(0);
+      expect(result.queuedPages).toBe(1);
     });
 
     it('regenerates completed pages when regenerate is true', async () => {
@@ -192,7 +204,7 @@ describe('IllustrationService', () => {
       const result = await service.queueStoryIllustrations(ownerId, 'story-1', {
         regenerate: true,
       });
-      expect(result.queuedPages).toBe(1);
+      expect(result.queuedPages).toBe(2);
     });
 
     it('rejects non-owners', async () => {
@@ -227,6 +239,7 @@ describe('IllustrationService', () => {
       });
       storyRepo.findOne.mockResolvedValue(makeStory());
       pageRepo.findOne.mockResolvedValue(page);
+      pageRepo.find.mockResolvedValue([page]);
       pageRepo.save.mockImplementation((p) => Promise.resolve(p));
 
       const result = await service.regeneratePage(ownerId, 'story-1', 'page-1');
@@ -236,7 +249,9 @@ describe('IllustrationService', () => {
       expect(queue.add).toHaveBeenCalledWith(
         'illustrate-page',
         expect.any(Object),
-        { jobId: `${ILLUSTRATION_JOB_PREFIX}-page-1` },
+        {
+          jobId: expect.stringContaining(`${ILLUSTRATION_JOB_PREFIX}-page-1-`),
+        },
       );
     });
 

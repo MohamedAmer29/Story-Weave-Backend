@@ -24,7 +24,7 @@ describe('UsersController', () => {
     }).compile();
 
     controller = module.get(UsersController);
-    service = module.get(UsersService) as any;
+    service = module.get(UsersService);
   });
 
   it('getProfile wraps response in success envelope', async () => {
@@ -37,8 +37,11 @@ describe('UsersController', () => {
   it('updateProfile returns the updated profile', async () => {
     service.updateProfile.mockResolvedValue({ id: 'u-1', firstName: 'Omar' });
     const dto = { firstName: 'Omar' };
-    const result = await controller.updateProfile('u-1', dto as any);
-    expect(result).toEqual({ success: true, data: { id: 'u-1', firstName: 'Omar' } });
+    const result = await controller.updateProfile('u-1', dto);
+    expect(result).toEqual({
+      success: true,
+      data: { id: 'u-1', firstName: 'Omar' },
+    });
     expect(service.updateProfile).toHaveBeenCalledWith('u-1', dto);
   });
 
@@ -46,7 +49,10 @@ describe('UsersController', () => {
     service.updateAvatar.mockResolvedValue({ avatarUrl: 'https://cdn/a.jpg' });
     const file = { buffer: Buffer.from('x') } as any;
     const result = await controller.uploadAvatar('u-1', file);
-    expect(result).toEqual({ success: true, data: { avatarUrl: 'https://cdn/a.jpg' } });
+    expect(result).toEqual({
+      success: true,
+      data: { avatarUrl: 'https://cdn/a.jpg' },
+    });
     expect(service.updateAvatar).toHaveBeenCalledWith('u-1', file);
   });
 
@@ -71,21 +77,39 @@ describe('UsersController', () => {
   });
 
   it('getSharedStories merges pagination meta', async () => {
-    service.getSharedStories.mockResolvedValue({ data: [], meta: { total: 4 } });
-    const result = await controller.getSharedStories('u-1', { page: 1, limit: 12 } as any);
+    service.getSharedStories.mockResolvedValue({
+      data: [],
+      meta: { total: 4 },
+    });
+    const result = await controller.getSharedStories('u-1', {
+      page: 1,
+      limit: 12,
+    } as any);
     expect(result).toEqual({ success: true, data: [], meta: { total: 4 } });
   });
 
   it('getPublicProfile returns a public author profile', async () => {
     service.getPublicProfile.mockResolvedValue({ id: 'u-1', name: 'Ahmed' });
     const result = await controller.getPublicProfile('u-1');
-    expect(result).toEqual({ success: true, data: { id: 'u-1', name: 'Ahmed' } });
+    expect(result).toEqual({
+      success: true,
+      data: { id: 'u-1', name: 'Ahmed' },
+    });
   });
 
   it('getPublicStories returns public stories for an author', async () => {
-    service.getPublicStories.mockResolvedValue({ data: [], meta: { total: 0 } });
-    const result = await controller.getPublicStories('u-1', { page: 1, limit: 12 } as any);
+    service.getPublicStories.mockResolvedValue({
+      data: [],
+      meta: { total: 0 },
+    });
+    const result = await controller.getPublicStories('u-1', {
+      page: 1,
+      limit: 12,
+    } as any);
     expect(result).toEqual({ success: true, data: [], meta: { total: 0 } });
-    expect(service.getPublicStories).toHaveBeenCalledWith('u-1', { page: 1, limit: 12 });
+    expect(service.getPublicStories).toHaveBeenCalledWith('u-1', {
+      page: 1,
+      limit: 12,
+    });
   });
 });

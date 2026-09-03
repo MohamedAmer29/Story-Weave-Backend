@@ -33,8 +33,7 @@ export class RateLimitGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const ip =
-      request.ip || request.headers['x-forwarded-for'] || 'unknown';
+    const ip = request.ip || request.headers['x-forwarded-for'] || 'unknown';
     const handlerName = context.getHandler().name;
     const key = `rate:${handlerName}:${ip}`;
 

@@ -12,6 +12,7 @@ import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { PublicCacheService } from '../common/services/public-cache.service';
+import { PromptValidationService } from './services/prompt-validation.service';
 
 function makeJob(overrides: Partial<any> = {}): any {
   const job: any = {
@@ -98,6 +99,12 @@ describe('IllustrationProcessor', () => {
           provide: PublicCacheService,
           useValue: {
             bust: jest.fn(),
+          },
+        },
+        {
+          provide: PromptValidationService,
+          useValue: {
+            validateImagePrompt: jest.fn().mockImplementation((p: string) => p),
           },
         },
       ],

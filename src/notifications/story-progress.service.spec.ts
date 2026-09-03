@@ -7,9 +7,9 @@ import { StoryProgressService } from './story-progress.service';
 import { NotificationType } from './notification-type.enum';
 import { StoryIllustrationStatus } from '../illustration/enums/story-illustration-status.enum';
 
-describe('StoryProgressService', () => {
+  describe('StoryProgressService', () => {
   let service: StoryProgressService;
-  let storyRepo: { save: jest.Mock };
+  let storyRepo: { save: jest.Mock; createQueryBuilder: jest.Mock };
   let notifications: {
     create: jest.Mock;
     hasDailyLimitNotification: jest.Mock;
@@ -36,10 +36,20 @@ describe('StoryProgressService', () => {
     };
   }
 
+  function claimQb(affected: number): any {
+    return {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected }),
+    };
+  }
+
   beforeEach(async () => {
     storyRepo = {
       save: jest.fn().mockImplementation((s) => Promise.resolve(s)),
       findOne: jest.fn().mockResolvedValue(null),
+      createQueryBuilder: jest.fn().mockReturnValue(claimQb(1)),
     };
     notifications = {
       create: jest.fn().mockResolvedValue({}),
@@ -86,6 +96,13 @@ describe('StoryProgressService', () => {
       } as unknown as Server);
 
       const story = makeStory();
+
+      // Simulate the DB: first call claims the terminal notification, the
+      // second call finds illustrationGenerationNotifiedAt already set.
+      (storyRepo.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(claimQb(1))
+        .mockReturnValueOnce(claimQb(0));
+
       await service.onChangeStatus(story, makeProgress());
 
       expect(notifications.create).toHaveBeenCalledWith(
@@ -120,6 +137,36 @@ describe('StoryProgressService', () => {
         expect.any(Object),
       );
       expect(io.emit).toHaveBeenCalledWith('story.failed', expect.any(Object));
+    });
+
+    it('sends a PARTIALLY_FAILED notification without claiming all illustrations failed', async () => {
+      service.setServer({
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
+      } as unknown as Server);
+
+      await service.onChangeStatus(
+        makeStory({ title: 'The Ember Blade' }),
+        makeProgress({
+          status: StoryIllustrationStatus.PARTIALLY_FAILED,
+          totalPages: 4,
+          completed: 3,
+          failed: 1,
+        }),
+      );
+
+      expect(notifications.create).toHaveBeenCalledWith(
+        'user-1',
+        NotificationType.STORY_GENERATION_PARTIALLY_FAILED,
+        'Story partially illustrated',
+        expect.stringContaining('3 of 4'),
+        expect.objectContaining({
+          storyId: 'story-1',
+          totalPages: 4,
+          completed: 3,
+          failed: 1,
+        }),
+      );
     });
   });
 

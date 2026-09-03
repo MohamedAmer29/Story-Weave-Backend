@@ -42,7 +42,9 @@ describe('DashboardService', () => {
       sharedStories: 3,
       illustratedPages: 95,
     });
-    mockUsers.getRecentStories.mockResolvedValue([{ id: 's-1', title: 'Forest' }]);
+    mockUsers.getRecentStories.mockResolvedValue([
+      { id: 's-1', title: 'Forest' },
+    ]);
     mockNotifications.getUserNotifications.mockResolvedValue({
       data: [
         {
@@ -69,12 +71,18 @@ describe('DashboardService', () => {
       user: { id: 'u-1', name: 'Ahmed Ali', avatarUrl: 'https://cdn/a.jpg' },
       stats: expect.objectContaining({ totalStories: 12 }),
       recentStories: [{ id: 's-1', title: 'Forest' }],
-      recentNotifications: [expect.objectContaining({ id: 'n-1', isRead: false })],
+      recentNotifications: [
+        expect.objectContaining({ id: 'n-1', isRead: false }),
+      ],
     });
   });
 
   it('returns empty collections when the user has no data', async () => {
-    mockUsers.getProfile.mockResolvedValue({ id: 'u-1', name: 'Ahmed', avatarUrl: null });
+    mockUsers.getProfile.mockResolvedValue({
+      id: 'u-1',
+      name: 'Ahmed',
+      avatarUrl: null,
+    });
     mockUsers.getStats.mockResolvedValue({ totalStories: 0 });
     mockUsers.getRecentStories.mockResolvedValue([]);
     mockNotifications.getUserNotifications.mockResolvedValue({ data: [] });

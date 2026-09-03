@@ -64,8 +64,15 @@ describe('UsersService', () => {
       findRecent: jest.fn(),
       findPublic: jest.fn(),
     };
-    cache = { get: jest.fn().mockResolvedValue(null), set: jest.fn(), bust: jest.fn().mockResolvedValue(undefined) };
-    cloudinary = { uploadImage: jest.fn(), deleteImage: jest.fn().mockResolvedValue(undefined) };
+    cache = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn(),
+      bust: jest.fn().mockResolvedValue(undefined),
+    };
+    cloudinary = {
+      uploadImage: jest.fn(),
+      deleteImage: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -104,7 +111,9 @@ describe('UsersService', () => {
 
     it('throws NotFound for unknown user', async () => {
       userRepo.findOne.mockResolvedValue(null);
-      await expect(service.getProfile('nope')).rejects.toThrow(NotFoundException);
+      await expect(service.getProfile('nope')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -131,9 +140,9 @@ describe('UsersService', () => {
 
     it('throws NotFound when updating a missing user', async () => {
       userRepo.findOne.mockResolvedValue(null);
-      await expect(service.updateProfile('nope', { firstName: 'X' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.updateProfile('nope', { firstName: 'X' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -145,23 +154,33 @@ describe('UsersService', () => {
     } as Express.Multer.File;
 
     it('rejects when no file provided', async () => {
-      await expect(service.updateAvatar('u-1', undefined)).rejects.toThrow(BadRequestException);
+      await expect(service.updateAvatar('u-1', undefined)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('rejects invalid MIME types', async () => {
       await expect(
-        service.updateAvatar('u-1', { ...validFile, mimetype: 'text/plain' } as any),
+        service.updateAvatar('u-1', {
+          ...validFile,
+          mimetype: 'text/plain',
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects oversized images', async () => {
       const big = { ...validFile, size: 6 * 1024 * 1024 } as any;
-      await expect(service.updateAvatar('u-1', big)).rejects.toThrow(BadRequestException);
+      await expect(service.updateAvatar('u-1', big)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('uploads to Cloudinary folder, saves URL and deletes the old avatar', async () => {
       userRepo.findOne.mockResolvedValue(
-        makeUser({ avatarUrl: 'https://cdn/old.jpg', avatarPublicId: 'storyforge/users/u-1/avatar/old' }),
+        makeUser({
+          avatarUrl: 'https://cdn/old.jpg',
+          avatarPublicId: 'storyforge/users/u-1/avatar/old',
+        }),
       );
       cloudinary.uploadImage.mockResolvedValue({
         secureUrl: 'https://cdn/new.jpg',
@@ -175,7 +194,9 @@ describe('UsersService', () => {
         folder: 'storyforge/users/u-1/avatar',
         publicId: 'avatar',
       });
-      expect(cloudinary.deleteImage).toHaveBeenCalledWith('storyforge/users/u-1/avatar/old');
+      expect(cloudinary.deleteImage).toHaveBeenCalledWith(
+        'storyforge/users/u-1/avatar/old',
+      );
       expect(result).toEqual({
         avatarUrl: 'https://cdn/new.jpg',
         avatarPublicId: 'storyforge/users/u-1/avatar/new',
@@ -244,11 +265,17 @@ describe('UsersService', () => {
 
   describe('library delegation', () => {
     it('delegates to the shared library service for owned stories', async () => {
-      library.findOwned.mockResolvedValue({ data: [], meta: { page: 1, limit: 10, total: 0, totalPages: 0 } });
+      library.findOwned.mockResolvedValue({
+        data: [],
+        meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+      });
 
       await service.getStoryLibrary('u-1', { page: 1, limit: 10 });
 
-      expect(library.findOwned).toHaveBeenCalledWith('u-1', { page: 1, limit: 10 });
+      expect(library.findOwned).toHaveBeenCalledWith('u-1', {
+        page: 1,
+        limit: 10,
+      });
     });
 
     it('delegates for shared stories and recent stories', async () => {
@@ -258,7 +285,10 @@ describe('UsersService', () => {
       await service.getSharedStories('u-1', { page: 1, limit: 10 });
       await service.getRecentStories('u-1', 5);
 
-      expect(library.findShared).toHaveBeenCalledWith('u-1', { page: 1, limit: 10 });
+      expect(library.findShared).toHaveBeenCalledWith('u-1', {
+        page: 1,
+        limit: 10,
+      });
       expect(library.findRecent).toHaveBeenCalledWith('u-1', 5);
     });
   });
@@ -285,7 +315,9 @@ describe('UsersService', () => {
 
     it('throws NotFound for a missing author', async () => {
       userRepo.findOne.mockResolvedValue(null);
-      await expect(service.getPublicProfile('nope')).rejects.toThrow(NotFoundException);
+      await expect(service.getPublicProfile('nope')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('allows guests to list only public stories of an author', async () => {
@@ -294,14 +326,17 @@ describe('UsersService', () => {
 
       await service.getPublicStories('u-1', { page: 1, limit: 10 });
 
-      expect(library.findPublic).toHaveBeenCalledWith({ page: 1, limit: 10 }, 'u-1');
+      expect(library.findPublic).toHaveBeenCalledWith(
+        { page: 1, limit: 10 },
+        'u-1',
+      );
     });
 
     it('rejects inactive authors', async () => {
       userRepo.findOne.mockResolvedValue(makeUser({ isActive: false }));
-      await expect(service.getPublicStories('u-1', { page: 1, limit: 10 } as any)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.getPublicStories('u-1', { page: 1, limit: 10 } as any),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

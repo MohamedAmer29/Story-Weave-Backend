@@ -43,5 +43,7 @@ export class PaginatedNotificationsResponseDto {
     limit: number;
     total: number;
     totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
   };
 }

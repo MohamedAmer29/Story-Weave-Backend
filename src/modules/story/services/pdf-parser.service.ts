@@ -38,9 +38,7 @@ export class PdfParserService {
 
       // Surface a clearer message if pdf-parse produced a known error
       const msg =
-        error && (error as any).message
-          ? (error as any).message
-          : 'Failed to parse PDF file';
+        error && error.message ? error.message : 'Failed to parse PDF file';
       throw new BadRequestException('Failed to parse PDF file');
     }
   }

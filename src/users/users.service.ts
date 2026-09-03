@@ -180,12 +180,9 @@ export class UsersService {
           .createQueryBuilder('story')
           .select('COUNT(*)', 'count')
           .where('story.userId = :userId', { userId })
-          .innerJoin(
-            'story.pages',
-            'page',
-            'page.imageStatus = :completed',
-            { completed: IllustrationPageStatus.COMPLETED },
-          )
+          .innerJoin('story.pages', 'page', 'page.imageStatus = :completed', {
+            completed: IllustrationPageStatus.COMPLETED,
+          })
           .getRawOne(),
       ]);
 
@@ -195,7 +192,10 @@ export class UsersService {
       Number(visibilityRows.find((r) => r.visibility === key)?.count) || 0;
 
     return {
-      totalStories: statusRows.reduce((acc, r) => acc + Number(r.count || 0), 0),
+      totalStories: statusRows.reduce(
+        (acc, r) => acc + Number(r.count || 0),
+        0,
+      ),
       publicStories: visCountFor(StoryVisibility.PUBLIC),
       privateStories: visCountFor(StoryVisibility.PRIVATE),
       sharedStories: visCountFor(StoryVisibility.SHARED),
@@ -260,7 +260,11 @@ export class UsersService {
       stats: { publicStories },
     };
 
-    await this.publicCacheService.set('public-author-profile', cacheKey, profile);
+    await this.publicCacheService.set(
+      'public-author-profile',
+      cacheKey,
+      profile,
+    );
 
     return profile;
   }

@@ -89,7 +89,10 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
-        { provide: getRepositoryToken(RefreshToken), useValue: mockRefreshTokenRepo },
+        {
+          provide: getRepositoryToken(RefreshToken),
+          useValue: mockRefreshTokenRepo,
+        },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EmailService, useValue: mockEmailService },
@@ -119,7 +122,9 @@ describe('AuthService', () => {
     });
   }
 
-  function makeRefreshToken(overrides: Partial<RefreshToken> = {}): RefreshToken {
+  function makeRefreshToken(
+    overrides: Partial<RefreshToken> = {},
+  ): RefreshToken {
     return Object.assign(new RefreshToken(), {
       id: 'rt-1',
       userId: 'user-1',
@@ -285,9 +290,9 @@ describe('AuthService', () => {
     it('throws for invalid refresh token', async () => {
       mockRefreshTokenRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.refreshTokens('invalid-token'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens('invalid-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('throws for expired refresh token', async () => {
@@ -297,17 +302,17 @@ describe('AuthService', () => {
       });
       mockRefreshTokenRepo.findOne.mockResolvedValue(rt);
 
-      await expect(
-        service.refreshTokens('expired-token'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens('expired-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('throws for revoked refresh token', async () => {
       mockRefreshTokenRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.refreshTokens('revoked-token'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens('revoked-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -342,7 +347,9 @@ describe('AuthService', () => {
     it('returns generic message', async () => {
       mockUserRepo.findOne.mockResolvedValue(makeUser());
 
-      const result = await service.forgotPassword({ email: 'test@example.com' });
+      const result = await service.forgotPassword({
+        email: 'test@example.com',
+      });
 
       expect(result.message).toContain('If the account exists');
       expect(mockEmailService.sendPasswordResetEmail).toHaveBeenCalled();
@@ -351,7 +358,9 @@ describe('AuthService', () => {
     it('returns same message for non-existent email', async () => {
       mockUserRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.forgotPassword({ email: 'nobody@example.com' });
+      const result = await service.forgotPassword({
+        email: 'nobody@example.com',
+      });
 
       expect(result.message).toContain('If the account exists');
     });
@@ -394,7 +403,10 @@ describe('AuthService', () => {
 
   describe('resetPassword', () => {
     it('resets password with valid token', async () => {
-      mockJwtService.verify.mockReturnValue({ sub: 'user-1', purpose: 'password-reset' });
+      mockJwtService.verify.mockReturnValue({
+        sub: 'user-1',
+        purpose: 'password-reset',
+      });
       mockUserRepo.findOne.mockResolvedValue(makeUser());
       mockRefreshTokenRepo.update.mockResolvedValue(undefined);
 
@@ -421,7 +433,10 @@ describe('AuthService', () => {
     });
 
     it('throws for wrong purpose token', async () => {
-      mockJwtService.verify.mockReturnValue({ sub: 'user-1', purpose: 'wrong' });
+      mockJwtService.verify.mockReturnValue({
+        sub: 'user-1',
+        purpose: 'wrong',
+      });
 
       await expect(
         service.resetPassword({
@@ -503,7 +518,9 @@ describe('AuthService', () => {
 
   describe('verifyEmail', () => {
     it('verifies email with valid OTP', async () => {
-      mockUserRepo.findOne.mockResolvedValue(makeUser({ emailVerified: false }));
+      mockUserRepo.findOne.mockResolvedValue(
+        makeUser({ emailVerified: false }),
+      );
       mockOtpService.getAttempts.mockResolvedValue(0);
       mockOtpService.verify.mockResolvedValue(true);
 
@@ -606,10 +623,9 @@ describe('AuthService', () => {
       const result = await service.revokeOtherSessions('user-1', 'rt-1');
 
       expect(result.message).toContain('Other sessions revoked');
-      expect(qbMock.andWhere).toHaveBeenCalledWith(
-        'id != :currentSessionId',
-        { currentSessionId: 'rt-1' },
-      );
+      expect(qbMock.andWhere).toHaveBeenCalledWith('id != :currentSessionId', {
+        currentSessionId: 'rt-1',
+      });
       expect(qbMock.execute).toHaveBeenCalled();
     });
 

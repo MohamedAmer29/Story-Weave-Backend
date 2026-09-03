@@ -1,4 +1,11 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
@@ -106,11 +113,7 @@ export class AuthService {
     };
   }
 
-  async register(
-    dto: RegisterDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async register(dto: RegisterDto, ipAddress?: string, userAgent?: string) {
     const normalizedEmail = dto.email.toLowerCase().trim();
 
     const existing = await this.userRepository.findOne({
@@ -159,11 +162,7 @@ export class AuthService {
     };
   }
 
-  async login(
-    dto: LoginDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async login(dto: LoginDto, ipAddress?: string, userAgent?: string) {
     const normalizedEmail = dto.email.toLowerCase().trim();
 
     const user = await this.userRepository
@@ -291,10 +290,7 @@ export class AuthService {
       };
     }
 
-    const isCoolingDown = await this.otpService.isCoolingDown(
-      user.id,
-      'reset',
-    );
+    const isCoolingDown = await this.otpService.isCoolingDown(user.id, 'reset');
     if (isCoolingDown) {
       return {
         message:
@@ -330,11 +326,10 @@ export class AuthService {
     }
 
     const attempts = await this.otpService.getAttempts(user.id, 'reset');
-    if (
-      attempts >=
-      this.configService.get<number>('otp.maxAttempts', 5)
-    ) {
-      throw new BadRequestException('Too many attempts. Please request a new code.');
+    if (attempts >= this.configService.get<number>('otp.maxAttempts', 5)) {
+      throw new BadRequestException(
+        'Too many attempts. Please request a new code.',
+      );
     }
 
     const valid = await this.otpService.verify(user.id, 'reset', dto.otp);
@@ -350,16 +345,10 @@ export class AuthService {
     return { resetToken };
   }
 
-  async resetPassword(dto: {
-    resetToken: string;
-    newPassword: string;
-  }) {
+  async resetPassword(dto: { resetToken: string; newPassword: string }) {
     let payload: { sub: string; purpose: string };
     try {
-      const verified = this.jwtService.verify(dto.resetToken) as {
-        sub: string;
-        purpose: string;
-      };
+      const verified = this.jwtService.verify(dto.resetToken);
       payload = verified;
     } catch {
       throw new UnauthorizedException('Invalid or expired reset token');
@@ -442,11 +431,10 @@ export class AuthService {
     }
 
     const attempts = await this.otpService.getAttempts(user.id, 'verify');
-    if (
-      attempts >=
-      this.configService.get<number>('otp.maxAttempts', 5)
-    ) {
-      throw new BadRequestException('Too many attempts. Please request a new code.');
+    if (attempts >= this.configService.get<number>('otp.maxAttempts', 5)) {
+      throw new BadRequestException(
+        'Too many attempts. Please request a new code.',
+      );
     }
 
     const valid = await this.otpService.verify(user.id, 'verify', dto.otp);

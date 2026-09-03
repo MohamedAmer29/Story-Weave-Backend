@@ -28,7 +28,13 @@ import { AdminBootstrapService } from './admin-bootstrap.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, EmailService, OtpService, JwtStrategy, AdminBootstrapService],
+  providers: [
+    AuthService,
+    EmailService,
+    OtpService,
+    JwtStrategy,
+    AdminBootstrapService,
+  ],
   exports: [AuthService, JwtStrategy],
 })
 export class AuthModule {}

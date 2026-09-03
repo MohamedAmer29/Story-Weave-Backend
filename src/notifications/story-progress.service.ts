@@ -131,7 +131,22 @@ export class StoryProgressService {
     story: Story,
     progress: IllustrationStatusResult,
   ): Promise<void> {
-    if (story.illustrationGenerationNotifiedAt) {
+    // Atomic duplicate-protection claim: only the first process that flips
+    // illustrationGenerationNotifiedAt (from NULL) is allowed to create the
+    // terminal notification. Concurrency/retries cannot produce duplicates.
+    const claim = await this.storyRepository
+      .createQueryBuilder()
+      .update(Story)
+      .set({
+        illustrationGenerationNotifiedAt: new Date(),
+        illustrationGenerationAttemptId: null,
+      })
+      .where('id = :id AND illustrationGenerationNotifiedAt IS NULL', {
+        id: story.id,
+      })
+      .execute();
+
+    if (claim.affected === 0) {
       return;
     }
 
@@ -148,8 +163,7 @@ export class StoryProgressService {
       failed: progress.failed,
     });
 
-    // mark terminal notification and clear the active generation attempt so
-    // subsequent generations can be started.
+    // Reflect the claim locally so callers observe a consistent state.
     story.illustrationGenerationNotifiedAt = new Date();
     story.illustrationGenerationAttemptId = null;
     await this.storyRepository.save(story).catch(() => undefined);
@@ -231,7 +245,7 @@ export class StoryProgressService {
       userId,
       NotificationType.STORY_GENERATION_STARTED,
       'Story illustration started',
-      `Generating illustrations for "${title}" (${totalPages} pages).`,
+      `Generating illustrations for "${title}" (${totalPages} image${totalPages === 1 ? '' : 's'}).`,
       { storyId, totalPages },
     );
   }

@@ -53,7 +53,9 @@ describe('NotificationsService', () => {
     service = module.get(NotificationsService);
   });
 
-  function makeNotification(overrides: Partial<Notification> = {}): Notification {
+  function makeNotification(
+    overrides: Partial<Notification> = {},
+  ): Notification {
     return Object.assign(new Notification(), {
       id: 'notif-1',
       userId,
@@ -129,6 +131,25 @@ describe('NotificationsService', () => {
         { unread: false },
       );
     });
+
+    it('returns hasNext/hasPrevious pagination flags', async () => {
+      const qb = makeQueryBuilder({
+        getManyAndCount: jest.fn().mockResolvedValue([[makeNotification()], 50]),
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+      repo.count.mockResolvedValue(3);
+
+      const result = await service.getUserNotifications(
+        userId,
+        Object.assign(new NotificationQueryDto(), { page: 2, limit: 20 }),
+      );
+
+      expect(result.meta.total).toBe(50);
+      expect(result.meta.totalPages).toBe(3);
+      expect(result.meta.hasNextPage).toBe(true);
+      expect(result.meta.hasPreviousPage).toBe(true);
+      expect(result.unreadCount).toBe(3);
+    });
   });
 
   describe('getUnreadCount', () => {
@@ -136,7 +157,9 @@ describe('NotificationsService', () => {
       repo.count.mockResolvedValue(3);
       const result = await service.getUnreadCount(userId);
       expect(result).toBe(3);
-      expect(repo.count).toHaveBeenCalledWith({ where: { userId, isRead: false } });
+      expect(repo.count).toHaveBeenCalledWith({
+        where: { userId, isRead: false },
+      });
     });
   });
 
@@ -153,9 +176,7 @@ describe('NotificationsService', () => {
     });
 
     it('throws when the notification belongs to another user', async () => {
-      repo.findOne.mockResolvedValue(
-        makeNotification({ userId: 'user-2' }),
-      );
+      repo.findOne.mockResolvedValue(makeNotification({ userId: 'user-2' }));
       await expect(
         service.markAsRead(userId, 'notif-1'),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -185,12 +206,10 @@ describe('NotificationsService', () => {
     });
 
     it('throws when the notification belongs to another user', async () => {
-      repo.findOne.mockResolvedValue(
-        makeNotification({ userId: 'user-2' }),
+      repo.findOne.mockResolvedValue(makeNotification({ userId: 'user-2' }));
+      await expect(service.delete(userId, 'notif-1')).rejects.toBeInstanceOf(
+        NotFoundException,
       );
-      await expect(
-        service.delete(userId, 'notif-1'),
-      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -236,7 +255,7 @@ describe('NotificationsService', () => {
   describe('toResponseDto', () => {
     it('maps the entity to the DTO shape', () => {
       const entity = makeNotification({ id: 'n1' });
-      const dto = service.toResponseDto(entity as Notification);
+      const dto = service.toResponseDto(entity);
       expect(dto.id).toBe('n1');
       expect(dto.isRead).toBe(false);
     });

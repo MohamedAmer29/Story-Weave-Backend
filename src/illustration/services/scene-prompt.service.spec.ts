@@ -1,4 +1,5 @@
 import { ScenePromptService } from './scene-prompt.service';
+import { GenreVisualStyleService } from './genre-visual-style.service';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
 
@@ -24,9 +25,11 @@ function makePage(): StoryPage {
 
 describe('ScenePromptService', () => {
   let service: ScenePromptService;
+  let genreService: { getVisualGuidance: jest.Mock };
 
   beforeEach(() => {
-    service = new ScenePromptService();
+    genreService = { getVisualGuidance: jest.fn().mockReturnValue(null) };
+    service = new ScenePromptService(genreService);
   });
 
   it('builds a prompt from story and page details', () => {
@@ -52,7 +55,9 @@ describe('ScenePromptService', () => {
 
   it('always suppresses text and watermarks', () => {
     const prompt = service.buildImagePrompt(makeStory(), makePage());
-    expect(prompt).toContain('no text, no captions, no watermark, no letters');
+    expect(prompt).toContain(
+      'no text, no captions, no subtitles, no speech bubbles, no logos, no watermark, no letters',
+    );
   });
 
   it('falls back to page text when no scene description exists', () => {

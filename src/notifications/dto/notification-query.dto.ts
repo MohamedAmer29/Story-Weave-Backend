@@ -10,11 +10,11 @@ export class NotificationQueryDto {
   @Type(() => Number)
   page: number = 1;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 50, default: 20 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(50)
+  @Max(100)
   @Type(() => Number)
   limit: number = 20;
 

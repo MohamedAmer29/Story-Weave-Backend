@@ -8,7 +8,9 @@ export class PromptValidationService {
 
   validateImagePrompt(prompt: string): string {
     if (!prompt || typeof prompt !== 'string') {
-      throw new BadRequestException('Invalid prompt: prompt must be a non-empty string');
+      throw new BadRequestException(
+        'Invalid prompt: prompt must be a non-empty string',
+      );
     }
 
     const trimmed = prompt.trim();

@@ -57,6 +57,8 @@ export class NotificationsService {
 
     const unreadCount = await this.getUnreadCount(userId);
 
+    const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
     return {
       data: data.map((n) => this.toResponseDto(n)),
       unreadCount,
@@ -64,7 +66,9 @@ export class NotificationsService {
         page,
         limit,
         total,
-        totalPages: total > 0 ? Math.ceil(total / limit) : 0,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
     };
   }

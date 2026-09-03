@@ -20,7 +20,9 @@ export class EmailService {
   }
 
   private get from(): string {
-    return this.configService.get<string>('email.from') || 'noreply@example.com';
+    return (
+      this.configService.get<string>('email.from') || 'noreply@example.com'
+    );
   }
 
   async sendVerificationEmail(to: string, otp: string): Promise<void> {

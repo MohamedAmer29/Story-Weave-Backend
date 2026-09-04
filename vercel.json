@@ -1,6 +1,16 @@
 {
-  "framework": "express",
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --production=false",
   "functions": {
-    "api/index.js": {}
-  }
+    "api/index.js": {
+      "maxDuration": 15
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.js"
+    }
+  ]
 }

@@ -4,7 +4,12 @@ import { RedisService } from '../../config/redis.service';
 describe('PublicCacheService', () => {
   let service: PublicCacheService;
   const store: Record<string, string> = {};
-  let redis: { getClient: jest.Mock; get: jest.Mock; set: jest.Mock; incrby: jest.Mock };
+  let redis: {
+    getClient: jest.Mock;
+    get: jest.Mock;
+    set: jest.Mock;
+    incrby: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -28,7 +33,7 @@ describe('PublicCacheService', () => {
       get: mockClient.get,
       set: mockClient.set,
       incrby: mockClient.incrby,
-    } as unknown as { getClient: jest.Mock; get: jest.Mock; set: jest.Mock; incrby: jest.Mock };
+    };
 
     service = new PublicCacheService(redis as unknown as RedisService);
   });
@@ -77,9 +82,7 @@ describe('PublicCacheService', () => {
 
     it('swallows write errors', async () => {
       redis.set.mockRejectedValueOnce(new Error('boom'));
-      await expect(
-        service.set('a', 'b', { x: 1 }),
-      ).resolves.toBeUndefined();
+      await expect(service.set('a', 'b', { x: 1 })).resolves.toBeUndefined();
     });
 
     it('swallows bust errors', async () => {

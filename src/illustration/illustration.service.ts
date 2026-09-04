@@ -155,15 +155,14 @@ export class IllustrationService {
       const previousStatus = page.imageStatus ?? IllustrationPageStatus.PENDING;
 
       try {
-        page.imageStatus = IllustrationPageStatus.QUEUED;
-        page.imageError = null;
-        await this.storyPageRepository.save(page);
-
         const prompt = this.scenePromptService.buildImagePrompt(
           story,
           page,
           orderedPages,
         );
+        // Set status + prompt together to persist in a single UPDATE.
+        page.imageStatus = IllustrationPageStatus.QUEUED;
+        page.imageError = null;
         page.imagePrompt = prompt;
         await this.storyPageRepository.save(page);
 

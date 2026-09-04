@@ -54,7 +54,7 @@ describe('RateLimitGuard', () => {
 
   it('uses x-forwarded-for header when ip missing', async () => {
     reflector.get.mockReturnValue({ ttl: 60, limit: 5 });
-    const context = makeContext() as any;
+    const context = makeContext();
     const request = context.switchToHttp().getRequest();
     request.ip = undefined;
     request.headers['x-forwarded-for'] = '8.8.8.8';
@@ -73,7 +73,10 @@ describe('RateLimitGuard', () => {
     const result = await guard.canActivate(makeContext());
     expect(result).toBe(true);
     expect(pipeline.incr).toHaveBeenCalledWith('rate:someHandler:127.0.0.1');
-    expect(pipeline.pexpire).toHaveBeenCalledWith('rate:someHandler:127.0.0.1', 60000);
+    expect(pipeline.pexpire).toHaveBeenCalledWith(
+      'rate:someHandler:127.0.0.1',
+      60000,
+    );
   });
 
   it('throws 429 when the limit is exceeded', async () => {

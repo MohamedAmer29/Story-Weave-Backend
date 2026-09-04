@@ -3,6 +3,9 @@ import { StoryStatus } from '../../../common/enums/story-status.enum';
 import { SourceType } from '../../../common/enums/source-type.enum';
 import { StoryVisibility } from '../../../common/enums/story-visibility.enum';
 import { StoryType } from '../../../common/enums/story-type.enum';
+import { StoryEra } from '../../../common/enums/story-era.enum';
+import { StoryCivilization } from '../../../common/enums/story-civilization.enum';
+import { StoryTheme } from '../../../common/enums/story-theme.enum';
 import { IllustrationPageStatus } from '../../../illustration/enums/illustration-page-status.enum';
 
 export class StoryAuthorDto {
@@ -103,6 +106,27 @@ export class StoryDetailsResponseDto {
 
   @ApiPropertyOptional()
   language?: string | null;
+
+  @ApiPropertyOptional({ enum: StoryEra })
+  era?: StoryEra | null;
+
+  @ApiPropertyOptional()
+  year?: number | null;
+
+  @ApiPropertyOptional()
+  location?: string | null;
+
+  @ApiPropertyOptional({ enum: StoryCivilization })
+  civilization?: StoryCivilization | null;
+
+  @ApiPropertyOptional()
+  customCivilization?: string | null;
+
+  @ApiPropertyOptional({ enum: StoryTheme })
+  theme?: StoryTheme | null;
+
+  @ApiPropertyOptional()
+  customTheme?: string | null;
 
   @ApiProperty({ type: StoryAuthorDto })
   author: StoryAuthorDto;

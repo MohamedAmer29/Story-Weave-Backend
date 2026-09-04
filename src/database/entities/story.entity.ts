@@ -14,6 +14,9 @@ import { SourceType } from '../../common/enums/source-type.enum';
 import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { StoryType } from '../../common/enums/story-type.enum';
 import { StoryLanguage } from '../../common/enums/story-language.enum';
+import { StoryEra } from '../../common/enums/story-era.enum';
+import { StoryCivilization } from '../../common/enums/story-civilization.enum';
+import { StoryTheme } from '../../common/enums/story-theme.enum';
 import { StoryIllustrationStatus } from '../../illustration/enums/story-illustration-status.enum';
 import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
 import { GenerationStatus } from '../../common/enums/generation-status.enum';
@@ -75,6 +78,39 @@ export class Story {
 
   @Column({ nullable: true, type: 'text' })
   visualStyle: string;
+
+  @Column({
+    type: 'enum',
+    enum: StoryEra,
+    default: StoryEra.UNSPECIFIED,
+  })
+  era: StoryEra;
+
+  @Column({ nullable: true, type: 'int' })
+  year: number | null;
+
+  @Column({ nullable: true, type: 'text' })
+  location: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: StoryCivilization,
+    default: StoryCivilization.UNSPECIFIED,
+  })
+  civilization: StoryCivilization;
+
+  @Column({ nullable: true, type: 'text' })
+  customCivilization: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: StoryTheme,
+    default: StoryTheme.UNSPECIFIED,
+  })
+  theme: StoryTheme;
+
+  @Column({ nullable: true, type: 'text' })
+  customTheme: string | null;
 
   @Column({
     type: 'enum',

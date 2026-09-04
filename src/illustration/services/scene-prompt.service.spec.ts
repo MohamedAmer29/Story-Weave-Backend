@@ -1,9 +1,13 @@
 import { ScenePromptService } from './scene-prompt.service';
 import { GenreVisualStyleService } from './genre-visual-style.service';
+import { StoryContextPromptService } from './story-context-prompt.service';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
 import { StoryLanguage } from '../../common/enums/story-language.enum';
 import { StoryType } from '../../common/enums/story-type.enum';
+import { StoryEra } from '../../common/enums/story-era.enum';
+import { StoryCivilization } from '../../common/enums/story-civilization.enum';
+import { StoryTheme } from '../../common/enums/story-theme.enum';
 
 function makeStory(): Story {
   return Object.assign(new Story(), {
@@ -33,7 +37,10 @@ describe('ScenePromptService', () => {
 
   beforeEach(() => {
     genreService = { getVisualGuidance: jest.fn().mockReturnValue(null) };
-    service = new ScenePromptService(genreService);
+    service = new ScenePromptService(
+      genreService,
+      new StoryContextPromptService(),
+    );
   });
 
   it('includes language-specific visual guidance for Arabic stories', () => {
@@ -49,7 +56,9 @@ describe('ScenePromptService', () => {
     );
     const prompt = service.buildImagePrompt(makeStory(), makePage());
     expect(prompt).toContain('magical atmosphere, enchanted landscapes');
-    expect(genreService.getVisualGuidance).toHaveBeenCalledWith(StoryType.FANTASY);
+    expect(genreService.getVisualGuidance).toHaveBeenCalledWith(
+      StoryType.FANTASY,
+    );
   });
 
   it('adds scene continuity referencing the previous page when multiple pages exist', () => {
@@ -63,11 +72,7 @@ describe('ScenePromptService', () => {
     page1.pageNumber = 1;
     page1.text = 'Ahmed found the glowing blue dragon in the forest.';
 
-    const prompt = service.buildImagePrompt(
-      story,
-      page2,
-      [page1, page2],
-    );
+    const prompt = service.buildImagePrompt(story, page2, [page1, page2]);
     expect(prompt).toContain('Scene continuity');
     expect(prompt).toContain('glowing blue dragon');
   });
@@ -150,5 +155,55 @@ describe('ScenePromptService', () => {
     page.sceneDescription = null as unknown as string;
     const prompt = service.buildImagePrompt(makeStory(), page);
     expect(prompt).toContain('glowing blue dragon');
+  });
+
+  describe('story context integration', () => {
+    function contextStory(): Story {
+      const story = makeStory();
+      story.era = StoryEra.BCE;
+      story.year = 1250;
+      story.location = 'Thebes, Egypt';
+      story.civilization = StoryCivilization.ANCIENT_EGYPTIAN;
+      story.theme = StoryTheme.ADVENTURE;
+      return story;
+    }
+
+    it('incorporates historical context into the page prompt', () => {
+      const prompt = service.buildImagePrompt(contextStory(), makePage());
+      expect(prompt).toContain('1250 BCE');
+      expect(prompt).toContain('Thebes, Egypt');
+      expect(prompt).toContain('Adventure');
+    });
+
+    it('incorporates historical context into the cover prompt', () => {
+      const prompt = service.buildCoverPrompt(contextStory());
+      expect(prompt).toContain('1250 BCE');
+      expect(prompt).toContain('Ancient Egyptian visual context');
+    });
+
+    it('keeps the story text authoritative when context is present', () => {
+      const prompt = service.buildImagePrompt(contextStory(), makePage());
+      expect(prompt).toContain('An enchanted forest at sunset');
+      expect(prompt).toContain(
+        'The events, characters, environment, objects, actions and mood must come exactly from the story text',
+      );
+    });
+
+    it('keeps final page prompt within 2000 chars under extreme input', () => {
+      const story = contextStory();
+      story.visualStyle = 'a'.repeat(4000);
+      story.customCivilization = 'b'.repeat(4000);
+      story.customTheme = 'c'.repeat(4000);
+      const prompt = service.buildImagePrompt(story, makePage());
+      expect(prompt.length).toBeLessThanOrEqual(2000);
+    });
+
+    it('keeps final cover prompt within 2000 chars under extreme input', () => {
+      const story = contextStory();
+      story.visualStyle = 'd'.repeat(4000);
+      story.description = 'e'.repeat(4000);
+      const prompt = service.buildCoverPrompt(story);
+      expect(prompt.length).toBeLessThanOrEqual(2000);
+    });
   });
 });

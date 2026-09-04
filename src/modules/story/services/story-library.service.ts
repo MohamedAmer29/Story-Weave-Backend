@@ -27,6 +27,21 @@ export interface StoryListFilters {
 
 const DEFAULT_SORT: StorySort = 'latest';
 
+// Only the columns needed to render library/list items are selected. This
+// avoids pulling large text columns (originalText, visualStyle, prompt, etc.)
+// into memory for every page of results.
+const LIST_STORY_SELECT: (keyof Story)[] = [
+  'id',
+  'title',
+  'description',
+  'visibility',
+  'status',
+  'sourceType',
+  'storyType',
+  'createdAt',
+  'updatedAt',
+];
+
 @Injectable()
 export class StoryLibraryService {
   constructor(
@@ -107,6 +122,7 @@ export class StoryLibraryService {
   ): Promise<StoryLibraryItemDto[]> {
     const stories = await this.storyRepository
       .createQueryBuilder('story')
+      .select(LIST_STORY_SELECT.map((col) => `story.${col}`))
       .where('story.userId = :userId', { userId })
       .orderBy('story.updatedAt', 'DESC')
       .take(Math.min(limit, 20))
@@ -170,6 +186,8 @@ export class StoryLibraryService {
     const page = filters.page < 1 ? 1 : filters.page;
     const limit = filters.limit;
     const skip = (page - 1) * limit;
+
+    qb.select(LIST_STORY_SELECT.map((col) => `story.${col}`));
 
     const [stories, total] = await qb.skip(skip).take(limit).getManyAndCount();
 

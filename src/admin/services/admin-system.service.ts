@@ -141,9 +141,7 @@ export class AdminSystemService {
       const info = await this.illustrationQueue.getJobCounts();
       queueOk = typeof info?.waiting === 'number';
     } catch (error: any) {
-      this.logger.error(
-        `[Admin] Queue health check failed: ${error?.message}`,
-      );
+      this.logger.error(`[Admin] Queue health check failed: ${error?.message}`);
     }
 
     let dbOk = false;

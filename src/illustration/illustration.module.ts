@@ -16,6 +16,7 @@ import { IllustrationService } from './illustration.service';
 import { IllustrationProcessor } from './illustration.processor';
 import { ScenePromptService } from './services/scene-prompt.service';
 import { GenreVisualStyleService } from './services/genre-visual-style.service';
+import { StoryContextPromptService } from './services/story-context-prompt.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { PromptValidationService } from './services/prompt-validation.service';
 
@@ -35,6 +36,7 @@ import { PromptValidationService } from './services/prompt-validation.service';
     IllustrationProcessor,
     ScenePromptService,
     GenreVisualStyleService,
+    StoryContextPromptService,
     IllustrationStatusService,
     PromptValidationService,
     {

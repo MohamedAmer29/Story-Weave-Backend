@@ -71,7 +71,9 @@ export class IllustrationProcessor
 
   onApplicationBootstrap(): void {
     const concurrency = Number(
-      process.env.AI_IMAGE_CONCURRENCY ? process.env.AI_IMAGE_CONCURRENCY : 2,
+      process.env.ILLUSTRATION_WORKER_CONCURRENCY ??
+        process.env.AI_IMAGE_CONCURRENCY ??
+        2,
     );
 
     this.worker = new Worker(

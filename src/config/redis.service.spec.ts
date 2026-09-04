@@ -117,7 +117,7 @@ describe('RedisService', () => {
     });
 
     it('throws when getting an uninitialized client', () => {
-      const fresh = new RedisService(makeConfig({}) as ConfigService);
+      const fresh = new RedisService(makeConfig({}));
       expect(() => fresh.getClient()).toThrow('Redis client not initialized');
     });
   });

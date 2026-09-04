@@ -17,7 +17,11 @@ import { IllustrationService } from '../../illustration/illustration.service';
 describe('AdminStoriesService', () => {
   let service: AdminStoriesService;
   let storyRepo: { createQueryBuilder: jest.Mock; findOne: jest.Mock };
-  let pageRepo: { createQueryBuilder: jest.Mock; find: jest.Mock; findOne: jest.Mock };
+  let pageRepo: {
+    createQueryBuilder: jest.Mock;
+    find: jest.Mock;
+    findOne: jest.Mock;
+  };
   let shareRepo: { createQueryBuilder: jest.Mock };
   let dataSource: { transaction: jest.Mock };
   let cloudinary: { deleteImage: jest.Mock };
@@ -59,7 +63,9 @@ describe('AdminStoriesService', () => {
     };
     shareRepo = { createQueryBuilder: jest.fn() };
     dataSource = {
-      transaction: jest.fn((cb) => cb({ delete: jest.fn(), createQueryBuilder: jest.fn() })),
+      transaction: jest.fn((cb) =>
+        cb({ delete: jest.fn(), createQueryBuilder: jest.fn() }),
+      ),
     };
     cloudinary = { deleteImage: jest.fn().mockResolvedValue(undefined) };
     cache = { bust: jest.fn().mockResolvedValue(undefined) };
@@ -117,7 +123,11 @@ describe('AdminStoriesService', () => {
     it('returns story with pages and stats', async () => {
       storyRepo.findOne.mockResolvedValue(makeStory());
       pageRepo.find.mockResolvedValue([
-        { id: 'p1', pageNumber: 1, imageStatus: IllustrationPageStatus.COMPLETED },
+        {
+          id: 'p1',
+          pageNumber: 1,
+          imageStatus: IllustrationPageStatus.COMPLETED,
+        },
       ]);
       const result = await service.getById('story-1');
       expect(result.id).toBe('story-1');
@@ -162,9 +172,9 @@ describe('AdminStoriesService', () => {
     it('throws NotFound when there are no failed pages', async () => {
       storyRepo.findOne.mockResolvedValue(makeStory());
       pageRepo.findOne.mockResolvedValue(null);
-      await expect(service.retryFailed('story-1', 'page')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.retryFailed('story-1', 'page'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('throws NotFound if story is missing', async () => {

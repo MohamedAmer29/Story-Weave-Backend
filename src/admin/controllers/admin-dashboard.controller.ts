@@ -12,7 +12,9 @@ export class AdminDashboardController {
   constructor(private readonly dashboardService: AdminDashboardService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Admin dashboard summary (users, stories, AI usage)' })
+  @ApiOperation({
+    summary: 'Admin dashboard summary (users, stories, AI usage)',
+  })
   async summary() {
     const data = await this.dashboardService.getSummary();
     return { success: true, data };

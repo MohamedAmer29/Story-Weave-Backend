@@ -116,7 +116,7 @@ describe('Reader API E2E', () => {
 
       expect(res.body).not.toHaveProperty('originalText');
       expect(res.body).not.toHaveProperty('errorMessage');
-      
+
       res.body.pages.forEach((page: any) => {
         expect(page).not.toHaveProperty('imagePrompt');
         expect(page).not.toHaveProperty('imageError');
@@ -266,9 +266,7 @@ describe('Reader API E2E', () => {
       });
 
       it('requires authentication', async () => {
-        await request(app.getHttpServer())
-          .get('/api/stories/my')
-          .expect(401);
+        await request(app.getHttpServer()).get('/api/stories/my').expect(401);
       });
     });
   });

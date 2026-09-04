@@ -3,7 +3,8 @@ import { StorySegmentationService } from './story-segmentation.service';
 describe('StorySegmentationService', () => {
   const svc = new StorySegmentationService();
 
-  const wordsOf = (n: number): string => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
+  const wordsOf = (n: number): string =>
+    Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
 
   describe('normalizeText', () => {
     it('collapses whitespace and trims', () => {

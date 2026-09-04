@@ -111,9 +111,7 @@ export class AdminUsersService {
     const user = await this.findUser(userId);
 
     if (user.id === actor.id && role !== UserRole.ADMIN) {
-      throw new BadRequestException(
-        'You cannot revoke your own ADMIN role',
-      );
+      throw new BadRequestException('You cannot revoke your own ADMIN role');
     }
 
     user.role = role;
@@ -126,11 +124,7 @@ export class AdminUsersService {
     };
   }
 
-  async setActive(
-    actor: { id: string },
-    userId: string,
-    isActive: boolean,
-  ) {
+  async setActive(actor: { id: string }, userId: string, isActive: boolean) {
     const user = await this.findUser(userId);
 
     if (user.id === actor.id && !isActive) {

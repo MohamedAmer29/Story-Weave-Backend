@@ -147,12 +147,16 @@ describe('CloudflareProvider', () => {
     });
 
     it('maps 403 to forbidden', async () => {
-      httpService.post.mockReturnValue(throwError(() => makeHttpError(403, {})));
+      httpService.post.mockReturnValue(
+        throwError(() => makeHttpError(403, {})),
+      );
       await expect(provider.generateImage('x')).rejects.toThrow('forbidden');
     });
 
     it('maps 404 to resource not found', async () => {
-      httpService.post.mockReturnValue(throwError(() => makeHttpError(404, {})));
+      httpService.post.mockReturnValue(
+        throwError(() => makeHttpError(404, {})),
+      );
       await expect(provider.generateImage('x')).rejects.toBeInstanceOf(
         InternalServerErrorException,
       );

@@ -31,6 +31,10 @@ import {
 import { PdfParserService } from './services/pdf-parser.service';
 import { StoryLanguage } from '../../common/enums/story-language.enum';
 import { StoryAccessService } from './services/story-access.service';
+import {
+  StoryContextService,
+  NormalizedStoryContext,
+} from './services/story-context.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
@@ -55,6 +59,7 @@ export class StoryService {
     private readonly storyParserService: StoryParserService,
     private readonly pdfParserService: PdfParserService,
     private readonly storyAccessService: StoryAccessService,
+    private readonly storyContextService: StoryContextService,
     private readonly illustrationStatusService: IllustrationStatusService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly publicCacheService: PublicCacheService,
@@ -72,6 +77,8 @@ export class StoryService {
       createStoryDto.title,
     );
 
+    const context = this.storyContextService.normalize(createStoryDto);
+
     const story = this.storyRepository.create({
       userId,
       title: parsedStory.title,
@@ -86,6 +93,7 @@ export class StoryService {
         parsedStory.language ??
         undefined,
       visualStyle: createStoryDto.visualStyle,
+      ...this.contextToEntity(context),
     });
 
     await this.storyRepository.save(story);
@@ -126,11 +134,12 @@ export class StoryService {
     } = queryDto;
     const skip = (page - 1) * limit;
 
+    // Access check via EXISTS avoids joining the shares table, which would
+    // multiply story rows (and inflate both the count and the result set).
     const queryBuilder = this.storyRepository
       .createQueryBuilder('story')
-      .leftJoinAndSelect('story.shares', 'share')
       .where(
-        '(story.userId = :userId OR story.visibility = :public OR share.userId = :userId)',
+        '(story.userId = :userId OR story.visibility = :public OR EXISTS (SELECT 1 FROM story_shares ss WHERE ss."storyId" = story."id" AND ss."userId" = :userId))',
         { userId, public: StoryVisibility.PUBLIC },
       );
 
@@ -168,7 +177,6 @@ export class StoryService {
     const [stories, total] = await queryBuilder
       .skip(skip)
       .take(limit)
-      .distinct(true)
       .getManyAndCount();
 
     const totalPages = Math.ceil(total / limit);
@@ -371,6 +379,13 @@ export class StoryService {
       status: story.status,
       sourceType: story.sourceType,
       language: story.language ?? null,
+      era: story.era ?? null,
+      year: story.year ?? null,
+      location: story.location ?? null,
+      civilization: story.civilization ?? null,
+      customCivilization: story.customCivilization ?? null,
+      theme: story.theme ?? null,
+      customTheme: story.customTheme ?? null,
       author,
       stats: {
         totalPages: status.totalPages,
@@ -422,6 +437,21 @@ export class StoryService {
 
     if (story.userId !== userId) {
       throw new ForbiddenException('Access denied');
+    }
+
+    // Normalize the Story Context portion of the update before persisting.
+    if (this.hasStoryContext(updateStoryDto)) {
+      const context = this.storyContextService.normalize(updateStoryDto);
+      // Merge the normalized context over the entity, then apply the rest of
+      // the DTO, being careful not to let raw context values leak through.
+      delete (updateStoryDto as any).era;
+      delete (updateStoryDto as any).year;
+      delete (updateStoryDto as any).location;
+      delete (updateStoryDto as any).civilization;
+      delete (updateStoryDto as any).customCivilization;
+      delete (updateStoryDto as any).theme;
+      delete (updateStoryDto as any).customTheme;
+      Object.assign(story, this.contextToEntity(context));
     }
 
     Object.assign(story, updateStoryDto);
@@ -621,10 +651,41 @@ export class StoryService {
       status: story.status,
       visibility: story.visibility,
       language: story.language ?? undefined,
+      era: story.era ?? undefined,
+      year: story.year ?? undefined,
+      location: story.location ?? undefined,
+      civilization: story.civilization ?? undefined,
+      customCivilization: story.customCivilization ?? undefined,
+      theme: story.theme ?? undefined,
+      customTheme: story.customTheme ?? undefined,
       errorMessage: story.errorMessage ?? undefined,
       createdAt: story.createdAt,
       updatedAt: story.updatedAt,
     };
+  }
+
+  private contextToEntity(context: NormalizedStoryContext): Partial<Story> {
+    return {
+      era: context.era,
+      year: context.year,
+      location: context.location,
+      civilization: context.civilization,
+      customCivilization: context.customCivilization,
+      theme: context.theme,
+      customTheme: context.customTheme,
+    };
+  }
+
+  private hasStoryContext(dto: object): boolean {
+    return (
+      'era' in dto ||
+      'year' in dto ||
+      'location' in dto ||
+      'civilization' in dto ||
+      'customCivilization' in dto ||
+      'theme' in dto ||
+      'customTheme' in dto
+    );
   }
 
   async updateVisibility(

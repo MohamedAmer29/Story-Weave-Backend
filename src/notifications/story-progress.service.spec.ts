@@ -7,7 +7,7 @@ import { StoryProgressService } from './story-progress.service';
 import { NotificationType } from './notification-type.enum';
 import { StoryIllustrationStatus } from '../illustration/enums/story-illustration-status.enum';
 
-  describe('StoryProgressService', () => {
+describe('StoryProgressService', () => {
   let service: StoryProgressService;
   let storyRepo: { save: jest.Mock; createQueryBuilder: jest.Mock };
   let notifications: {
@@ -99,7 +99,7 @@ import { StoryIllustrationStatus } from '../illustration/enums/story-illustratio
 
       // Simulate the DB: first call claims the terminal notification, the
       // second call finds illustrationGenerationNotifiedAt already set.
-      (storyRepo.createQueryBuilder as jest.Mock)
+      storyRepo.createQueryBuilder
         .mockReturnValueOnce(claimQb(1))
         .mockReturnValueOnce(claimQb(0));
 

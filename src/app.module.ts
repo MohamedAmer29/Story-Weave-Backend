@@ -60,25 +60,44 @@ import { AdminModule } from './admin/admin.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('database.host'),
-        port: configService.get<number>('database.port'),
-        username: configService.get<string>('database.username'),
-        password: configService.get<string>('database.password'),
-        database: configService.get<string>('database.database'),
-        entities: [
-          User,
-          Story,
-          StoryPage,
-          StoryShare,
-          Notification,
-          RefreshToken,
-          AuditLog,
-        ],
-        synchronize: configService.get<boolean>('database.synchronize', false),
-        logging: configService.get<boolean>('database.logging', false),
-      }),
+      useFactory: (configService: ConfigService) => {
+        const pool = configService.get<{
+          max: number;
+          min: number;
+          connectionTimeoutMs: number;
+          idleTimeoutMs: number;
+          statementTimeoutMs: number;
+        }>('database.pool')!;
+        return {
+          type: 'postgres' as const,
+          host: configService.get<string>('database.host'),
+          port: configService.get<number>('database.port'),
+          username: configService.get<string>('database.username'),
+          password: configService.get<string>('database.password'),
+          database: configService.get<string>('database.database'),
+          entities: [
+            User,
+            Story,
+            StoryPage,
+            StoryShare,
+            Notification,
+            RefreshToken,
+            AuditLog,
+          ],
+          synchronize: configService.get<boolean>(
+            'database.synchronize',
+            false,
+          ),
+          logging: configService.get<boolean>('database.logging', false),
+          extra: {
+            max: pool.max,
+            min: pool.min,
+            connectionTimeoutMillis: pool.connectionTimeoutMs,
+            idleTimeoutMillis: pool.idleTimeoutMs,
+            statement_timeout: pool.statementTimeoutMs,
+          },
+        };
+      },
       inject: [ConfigService],
     }),
     AuthModule,

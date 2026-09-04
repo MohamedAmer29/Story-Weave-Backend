@@ -4,7 +4,14 @@ import { ConfigService } from '@nestjs/config';
 
 describe('OtpService', () => {
   let service: OtpService;
-  let redis: { getClient: jest.Mock; get: jest.Mock; set: jest.Mock; del: jest.Mock; incrby: jest.Mock; expire: jest.Mock };
+  let redis: {
+    getClient: jest.Mock;
+    get: jest.Mock;
+    set: jest.Mock;
+    del: jest.Mock;
+    incrby: jest.Mock;
+    expire: jest.Mock;
+  };
   let config: ConfigService;
 
   const mockStore: Record<string, string> = {};
@@ -44,7 +51,7 @@ describe('OtpService', () => {
       del: mockClient.del,
       incrby: mockClient.incrby,
       expire: mockClient.expire,
-    } as unknown as { getClient: jest.Mock; get: jest.Mock; set: jest.Mock; del: jest.Mock; incrby: jest.Mock; expire: jest.Mock };
+    };
 
     const configValues: Record<string, unknown> = {
       'otp.expiresInMinutes': 10,

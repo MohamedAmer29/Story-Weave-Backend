@@ -134,7 +134,9 @@ describe('NotificationsService', () => {
 
     it('returns hasNext/hasPrevious pagination flags', async () => {
       const qb = makeQueryBuilder({
-        getManyAndCount: jest.fn().mockResolvedValue([[makeNotification()], 50]),
+        getManyAndCount: jest
+          .fn()
+          .mockResolvedValue([[makeNotification()], 50]),
       });
       repo.createQueryBuilder.mockReturnValue(qb);
       repo.count.mockResolvedValue(3);

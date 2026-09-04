@@ -31,10 +31,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
-import {
-  UuidParamDto,
-  SessionIdParamDto,
-} from '../common/dto/uuid-param.dto';
+import { UuidParamDto, SessionIdParamDto } from '../common/dto/uuid-param.dto';
 import type { CookieOptions } from 'express';
 
 @ApiTags('auth')

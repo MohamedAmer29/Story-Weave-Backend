@@ -24,10 +24,7 @@ import type { Express, Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
-import {
-  UuidParamDto,
-  UserIdParamDto,
-} from '../common/dto/uuid-param.dto';
+import { UuidParamDto, UserIdParamDto } from '../common/dto/uuid-param.dto';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { LibraryQueryDto } from './dto/library-query.dto';
@@ -152,9 +149,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Get a public author profile' })
   @ApiResponse({ status: 200, description: 'Public author profile' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async getPublicProfile(
-    @Param() params: UserIdParamDto,
-  ) {
+  async getPublicProfile(@Param() params: UserIdParamDto) {
     const data = await this.usersService.getPublicProfile(params.userId);
     return { success: true, data };
   }

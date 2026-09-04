@@ -135,6 +135,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     // Guard against runaway/unbounded length on log lines.
-    return sanitized.length > 500 ? `${sanitized.substring(0, 500)}...` : sanitized;
+    return sanitized.length > 500
+      ? `${sanitized.substring(0, 500)}...`
+      : sanitized;
   }
 }

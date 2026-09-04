@@ -11,12 +11,11 @@ describe('JwtStrategy', () => {
     jest.clearAllMocks();
     userRepository = { findOne: jest.fn() };
     const configService = {
-      get: jest.fn((key: string) => (key === 'jwt.secret' ? 'test-secret' : undefined)),
+      get: jest.fn((key: string) =>
+        key === 'jwt.secret' ? 'test-secret' : undefined,
+      ),
     } as unknown as ConfigService;
-    strategy = new JwtStrategy(
-      configService,
-      userRepository as any,
-    );
+    strategy = new JwtStrategy(configService, userRepository as any);
   });
 
   describe('validate', () => {

@@ -44,7 +44,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
-import { UuidParamDto, UuidTargetUserIdParamDto } from '../../common/dto/uuid-param.dto';
+import {
+  UuidParamDto,
+  UuidTargetUserIdParamDto,
+} from '../../common/dto/uuid-param.dto';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 
 // Rate limit metadata key (used by the global RateLimitGuard)
@@ -193,7 +196,11 @@ export class StoryController {
     @Param() params: UuidParamDto,
     @Body() body: UpdateVisibilityDto,
   ): Promise<StoryResponseDto> {
-    return this.storyService.updateVisibility(userId, params.id, body.visibility);
+    return this.storyService.updateVisibility(
+      userId,
+      params.id,
+      body.visibility,
+    );
   }
 
   @Post(':id/share')
@@ -222,7 +229,11 @@ export class StoryController {
     @CurrentUser('id') userId: string,
     @Param() params: UuidTargetUserIdParamDto,
   ): Promise<void> {
-    return this.storyService.removeShare(userId, params.id, params.targetUserId);
+    return this.storyService.removeShare(
+      userId,
+      params.id,
+      params.targetUserId,
+    );
   }
 
   @Get(':id/shares')

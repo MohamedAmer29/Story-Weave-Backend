@@ -24,7 +24,7 @@ describe('IllustrationController', () => {
     storyService = { getPagesForUser: jest.fn() };
     controller = new IllustrationController(
       illustrationService as unknown as IllustrationService,
-      statusService as unknown as IllustrationStatusService,
+      statusService,
       storyService as unknown as StoryService,
     );
   });
@@ -37,7 +37,7 @@ describe('IllustrationController', () => {
       });
       const result = await controller.generateIllustrations(
         'u1',
-        { storyId: 's-1' } as any,
+        { storyId: 's-1' },
         dto as any,
       );
       expect(illustrationService.queueStoryIllustrations).toHaveBeenCalledWith(
@@ -52,10 +52,10 @@ describe('IllustrationController', () => {
   describe('regeneratePage', () => {
     it('delegates to the service with story and page ids', async () => {
       illustrationService.regeneratePage.mockResolvedValue({ queued: true });
-      await controller.regeneratePage(
-        'u1',
-        { storyId: 's-1', pageId: 'p-1' } as any,
-      );
+      await controller.regeneratePage('u1', {
+        storyId: 's-1',
+        pageId: 'p-1',
+      });
       expect(illustrationService.regeneratePage).toHaveBeenCalledWith(
         'u1',
         's-1',
@@ -67,8 +67,11 @@ describe('IllustrationController', () => {
   describe('regenerateCover', () => {
     it('delegates to the service', async () => {
       illustrationService.regenerateCover.mockResolvedValue({ queued: true });
-      await controller.regenerateCover('u1', { storyId: 's-1' } as any);
-      expect(illustrationService.regenerateCover).toHaveBeenCalledWith('u1', 's-1');
+      await controller.regenerateCover('u1', { storyId: 's-1' });
+      expect(illustrationService.regenerateCover).toHaveBeenCalledWith(
+        'u1',
+        's-1',
+      );
     });
   });
 
@@ -89,7 +92,7 @@ describe('IllustrationController', () => {
 
       const result = await controller.getIllustrationStatus('u1', {
         storyId: 's-1',
-      } as any);
+      });
 
       expect(storyService.getPagesForUser).toHaveBeenCalledWith('s-1', 'u1');
       expect(statusService.computeStatus).toHaveBeenCalledWith(pages);

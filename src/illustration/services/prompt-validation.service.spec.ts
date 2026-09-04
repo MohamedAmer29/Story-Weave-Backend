@@ -28,7 +28,9 @@ describe('PromptValidationService', () => {
 
     it('throws when prompt exceeds the max length', () => {
       const tooLong = 'x'.repeat(svc.getMaxPromptLength() + 1);
-      expect(() => svc.validateImagePrompt(tooLong)).toThrow(BadRequestException);
+      expect(() => svc.validateImagePrompt(tooLong)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('accepts a prompt exactly at the max length', () => {

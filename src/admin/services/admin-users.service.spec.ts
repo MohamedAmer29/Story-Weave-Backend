@@ -77,20 +77,16 @@ describe('AdminUsersService', () => {
   describe('list', () => {
     it('returns paginated users with story counts', async () => {
       const users = [makeUser(), makeUser({ id: 'user-2' })];
-      userRepo.createQueryBuilder.mockReturnValue(
-        mockQueryBuilder([users, 2]),
-      );
+      userRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder([users, 2]));
       storyRepo.createQueryBuilder.mockReturnValue({
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest
-          .fn()
-          .mockResolvedValue([
-            { userId: 'user-1', count: '3' },
-            { userId: 'user-2', count: '1' },
-          ]),
+        getRawMany: jest.fn().mockResolvedValue([
+          { userId: 'user-1', count: '3' },
+          { userId: 'user-2', count: '1' },
+        ]),
       });
 
       const result = await service.list({ page: 1, limit: 20 });
@@ -136,11 +132,7 @@ describe('AdminUsersService', () => {
       const admin = makeUser({ id: 'admin-1', role: UserRole.ADMIN });
       userRepo.findOne.mockResolvedValue(admin);
       await expect(
-        service.updateRole(
-          { id: 'admin-1' },
-          'admin-1',
-          UserRole.USER,
-        ),
+        service.updateRole({ id: 'admin-1' }, 'admin-1', UserRole.USER),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 

@@ -7,7 +7,9 @@ describe('DashboardController', () => {
 
   beforeEach(() => {
     service = { getDashboard: jest.fn() };
-    controller = new DashboardController(service as unknown as DashboardService);
+    controller = new DashboardController(
+      service as unknown as DashboardService,
+    );
   });
 
   it('returns the dashboard wrapped in success for the current user', async () => {

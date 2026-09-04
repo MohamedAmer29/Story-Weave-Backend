@@ -14,7 +14,9 @@ describe('OptionalJwtAuthGuard', () => {
     });
 
     it('returns undefined when an error occurs', () => {
-      expect(guard.handleRequest(new Error('boom'), { id: 'u1' })).toBeUndefined();
+      expect(
+        guard.handleRequest(new Error('boom'), { id: 'u1' }),
+      ).toBeUndefined();
     });
 
     it('returns the user when authentication succeeds', () => {

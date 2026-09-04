@@ -10,6 +10,7 @@ import { StoryService } from './story.service';
 import { PdfParserService } from './services/pdf-parser.service';
 import { StoryParserService } from './services/story-parser.service';
 import { StoryAccessService } from './services/story-access.service';
+import { StoryContextService } from './services/story-context.service';
 import { StoryLibraryService } from './services/story-library.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { NotificationsModule } from '../../notifications/notifications.module';
@@ -31,6 +32,7 @@ import { NotificationsModule } from '../../notifications/notifications.module';
     PdfParserService,
     StoryParserService,
     StoryAccessService,
+    StoryContextService,
     StoryLibraryService,
     IllustrationStatusService,
   ],

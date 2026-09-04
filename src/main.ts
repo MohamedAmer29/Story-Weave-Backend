@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -14,6 +15,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Graceful shutdown on SIGTERM/SIGINT: runs OnApplicationShutdown hooks
+  // (closes the BullMQ worker, Redis, and DB connections cleanly).
+  app.enableShutdownHooks();
+
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port', 3000);
   const apiPrefix = configService.get<string>('app.apiPrefix', 'api');
@@ -23,11 +28,17 @@ async function bootstrap() {
     'http://localhost:5173',
   ]);
   const corsCredentials = configService.get<boolean>('cors.credentials', true);
-  const isProduction = configService.get<string>('app.environment') === 'production';
+  const isProduction =
+    configService.get<string>('app.environment') === 'production';
 
   app.setGlobalPrefix(apiPrefix);
 
   app.use(cookieParser());
+
+  // HTTP response compression (gzip/deflate/brotli) for text-bearing payloads
+  // (JSON API responses). Image files are never proxied through the API (they
+  // are served from Cloudinary URLs), so we don't risk double-compressing.
+  app.use(compression());
 
   app.use(new RequestIdMiddleware().use);
 
@@ -53,7 +64,10 @@ async function bootstrap() {
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=()',
+    );
     if (isProduction) {
       res.setHeader(
         'Strict-Transport-Security',

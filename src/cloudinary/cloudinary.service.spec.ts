@@ -7,7 +7,9 @@ import { v2 as cloudinary } from 'cloudinary';
 
 describe('CloudinaryService', () => {
   let service: CloudinaryService;
-  const uploaderMock = cloudinary.uploader as jest.Mocked<typeof cloudinary.uploader>;
+  const uploaderMock = cloudinary.uploader as jest.Mocked<
+    typeof cloudinary.uploader
+  >;
 
   const makeConfig = (withCreds = true) => {
     const values: Record<string, unknown> = withCreds
@@ -25,11 +27,16 @@ describe('CloudinaryService', () => {
   // Helper: make upload_stream invoke a success callback and record options.
   const mockUploadSuccess = (result: any = null) => {
     let capturedOptions: any;
-    (uploaderMock.upload_stream as any).mockImplementation((options: any, callback: any) => {
-      capturedOptions = options;
-      callback(null, result ?? { secure_url: 'https://cdn/x.png', public_id: 'abc' });
-      return { end: jest.fn() };
-    });
+    (uploaderMock.upload_stream as any).mockImplementation(
+      (options: any, callback: any) => {
+        capturedOptions = options;
+        callback(
+          null,
+          result ?? { secure_url: 'https://cdn/x.png', public_id: 'abc' },
+        );
+        return { end: jest.fn() };
+      },
+    );
     return () => capturedOptions;
   };
 
@@ -107,13 +114,16 @@ describe('CloudinaryService', () => {
   describe('deleteImage', () => {
     it('resolves immediately for empty publicId', async () => {
       await expect(service.deleteImage('')).resolves.toBeUndefined();
-      await expect(service.deleteImage(undefined as any)).resolves.toBeUndefined();
+      await expect(
+        service.deleteImage(undefined as any),
+      ).resolves.toBeUndefined();
       expect(uploaderMock.destroy).not.toHaveBeenCalled();
     });
 
     it('calls destroy and resolves on success', async () => {
       (uploaderMock.destroy as any).mockImplementation(
-        (_id: any, _opts: any, callback: any) => callback(null, { result: 'ok' }),
+        (_id: any, _opts: any, callback: any) =>
+          callback(null, { result: 'ok' }),
       );
       await expect(service.deleteImage('abc')).resolves.toBeUndefined();
       expect(uploaderMock.destroy).toHaveBeenCalledWith(

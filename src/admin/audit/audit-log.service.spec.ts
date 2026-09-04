@@ -5,7 +5,11 @@ import { AuditLogService } from './audit-log.service';
 
 describe('AuditLogService', () => {
   let service: AuditLogService;
-  let repo: { create: jest.Mock; save: jest.Mock; createQueryBuilder: jest.Mock };
+  let repo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
 
   function mockQueryBuilder(result: any) {
     return {

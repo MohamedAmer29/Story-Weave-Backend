@@ -25,14 +25,9 @@ describe('Admin authorization', () => {
         if (key === 'constructor') return;
         const handler = prototype[key];
         if (typeof handler !== 'function') return;
-        const handlerRoles = reflector.get<Array<UserRole>>(
-          ROLES_KEY,
-          handler,
-        );
+        const handlerRoles = reflector.get<Array<UserRole>>(ROLES_KEY, handler);
         const roles =
-          handlerRoles && handlerRoles.length > 0
-            ? handlerRoles
-            : classRoles;
+          handlerRoles && handlerRoles.length > 0 ? handlerRoles : classRoles;
         expect(roles).toBeDefined();
         expect(roles).toContain(UserRole.ADMIN);
       });

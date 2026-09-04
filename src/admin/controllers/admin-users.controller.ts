@@ -12,10 +12,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../database/entities/user.entity';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdminUsersService } from '../services/admin-users.service';
-import {
-  AdminUserQueryDto,
-  UpdateUserRoleDto,
-} from '../dto/admin-query.dto';
+import { AdminUserQueryDto, UpdateUserRoleDto } from '../dto/admin-query.dto';
 import { Audit } from '../audit/audit.decorator';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 

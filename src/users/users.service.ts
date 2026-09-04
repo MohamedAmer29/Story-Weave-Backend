@@ -161,10 +161,7 @@ export class UsersService {
     };
   }
 
-  private hasValidImageSignature(
-    buffer: Buffer,
-    mimeType: string,
-  ): boolean {
+  private hasValidImageSignature(buffer: Buffer, mimeType: string): boolean {
     if (!buffer || buffer.length < 12) {
       return false;
     }
@@ -180,10 +177,10 @@ export class UsersService {
         );
       case 'image/gif':
         return (
-          (buffer[0] === 0x47 &&
-            buffer[1] === 0x49 &&
-            buffer[2] === 0x46 &&
-            buffer[3] === 0x38) &&
+          buffer[0] === 0x47 &&
+          buffer[1] === 0x49 &&
+          buffer[2] === 0x46 &&
+          buffer[3] === 0x38 &&
           (buffer[4] === 0x37 || buffer[4] === 0x39) &&
           buffer[5] === 0x61
         );

@@ -14,14 +14,20 @@ jest.mock('fs', () => ({
 describe('AIService', () => {
   let service: AIService;
   let cloudflareProvider: { generateImage: jest.Mock };
-  let usageService: { canMakeRequest: jest.Mock; getCurrentUsage: jest.Mock; getSafetyLimit: jest.Mock };
+  let usageService: {
+    canMakeRequest: jest.Mock;
+    getCurrentUsage: jest.Mock;
+    getSafetyLimit: jest.Mock;
+  };
 
   const makeConfig = (provider: string) => {
     const values: Record<string, unknown> = {
       'ai.provider': provider,
       'ai.model': '@cf/black-forest-labs/flux-1-schnell',
     };
-    return { get: jest.fn((k: string) => values[k]) } as unknown as ConfigService;
+    return {
+      get: jest.fn((k: string) => values[k]),
+    } as unknown as ConfigService;
   };
 
   beforeEach(() => {

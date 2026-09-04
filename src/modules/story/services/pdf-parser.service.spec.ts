@@ -31,16 +31,16 @@ describe('PdfParserService', () => {
 
     it('throws BadRequestException for empty extracted text', async () => {
       pdfParserMock.mockResolvedValue({ text: '   \n  ' });
-      await expect(service.extractText(Buffer.from('x'))).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.extractText(Buffer.from('x')),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('throws BadRequestException when pdf parsing fails', async () => {
       pdfParserMock.mockRejectedValue(new Error('corrupt pdf'));
-      await expect(service.extractText(Buffer.from('x'))).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.extractText(Buffer.from('x')),
+      ).rejects.toBeInstanceOf(BadRequestException);
       await expect(service.extractText(Buffer.from('x'))).rejects.toThrow(
         'Failed to parse PDF file',
       );
@@ -50,9 +50,9 @@ describe('PdfParserService', () => {
       pdfParserMock.mockRejectedValue(
         new BadRequestException('PDF contains no extractable text'),
       );
-      await expect(service.extractText(Buffer.from('x'))).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.extractText(Buffer.from('x')),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

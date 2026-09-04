@@ -35,7 +35,7 @@ describe('Authentication E2E', () => {
 
     it('rejects duplicate email', async () => {
       const email = `duplicate-${Date.now()}@example.com`;
-      
+
       await request(app.getHttpServer())
         .post('/api/auth/register')
         .send({
@@ -112,7 +112,7 @@ describe('Authentication E2E', () => {
     beforeAll(async () => {
       registeredEmail = `login-${Date.now()}@example.com`;
       registeredPassword = 'LoginPass123!';
-      
+
       await request(app.getHttpServer())
         .post('/api/auth/register')
         .send({
@@ -194,9 +194,7 @@ describe('Authentication E2E', () => {
     });
 
     it('rejects missing token', async () => {
-      await request(app.getHttpServer())
-        .get('/api/auth/me')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/auth/me').expect(401);
     });
 
     it('rejects invalid token', async () => {
@@ -216,9 +214,7 @@ describe('Authentication E2E', () => {
 
   describe('Protected Routes', () => {
     it('anonymous user cannot access protected route', async () => {
-      await request(app.getHttpServer())
-        .get('/api/stories/my')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/stories/my').expect(401);
     });
 
     it('authenticated user can access protected route', async () => {

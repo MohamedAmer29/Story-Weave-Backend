@@ -34,9 +34,7 @@ describe('Error Handling and Validation E2E', () => {
     });
 
     it('returns 401 for unauthorized', async () => {
-      await request(app.getHttpServer())
-        .get('/api/auth/me')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/auth/me').expect(401);
     });
 
     it('returns 403 for forbidden', async () => {
@@ -74,7 +72,7 @@ describe('Error Handling and Validation E2E', () => {
 
     it('returns 409 for conflict (duplicate)', async () => {
       const email = `conflict-${Date.now()}@example.com`;
-      
+
       await request(app.getHttpServer())
         .post('/api/auth/register')
         .send({
@@ -99,9 +97,7 @@ describe('Error Handling and Validation E2E', () => {
     it('returns 500 for server error (simulated)', async () => {
       // This would require triggering a server error
       // For now, we verify the error structure
-      await request(app.getHttpServer())
-        .get('/api/does-not-exist')
-        .expect(404); // 404 is more appropriate than 500 for this
+      await request(app.getHttpServer()).get('/api/does-not-exist').expect(404); // 404 is more appropriate than 500 for this
     });
   });
 
@@ -211,7 +207,7 @@ describe('Error Handling and Validation E2E', () => {
 
     it('rejects oversized strings', async () => {
       const longTitle = 'x'.repeat(1000);
-      
+
       await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)

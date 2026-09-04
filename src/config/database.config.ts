@@ -9,4 +9,21 @@ export default registerAs('database', () => ({
   database: process.env.DATABASE_NAME,
   synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',
   logging: process.env.DATABASE_LOGGING === 'true',
+  // Connection pool / timeouts (tunable for production sizing).
+  pool: {
+    max: parseInt(process.env.DATABASE_POOL_MAX || '20', 10),
+    min: parseInt(process.env.DATABASE_POOL_MIN || '1', 10),
+    connectionTimeoutMs: parseInt(
+      process.env.DATABASE_CONNECTION_TIMEOUT_MS || '10000',
+      10,
+    ),
+    idleTimeoutMs: parseInt(
+      process.env.DATABASE_IDLE_TIMEOUT_MS || '30000',
+      10,
+    ),
+    statementTimeoutMs: parseInt(
+      process.env.DATABASE_STATEMENT_TIMEOUT_MS || '30000',
+      10,
+    ),
+  },
 }));

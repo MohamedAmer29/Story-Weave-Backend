@@ -1,6 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
-import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
 import { StoryShare } from '../../database/entities/story-share.entity';
@@ -10,9 +14,13 @@ import { NotificationType } from '../../notifications/notification-type.enum';
 import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { StoryStatus } from '../../common/enums/story-status.enum';
 import { SourceType } from '../../common/enums/source-type.enum';
+import { StoryEra } from '../../common/enums/story-era.enum';
+import { StoryCivilization } from '../../common/enums/story-civilization.enum';
+import { StoryTheme } from '../../common/enums/story-theme.enum';
 import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
 import { StoryService } from './story.service';
 import { StoryParserService } from './services/story-parser.service';
+import { StoryContextService } from './services/story-context.service';
 import { PdfParserService } from './services/pdf-parser.service';
 import { StoryAccessService } from './services/story-access.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
@@ -64,6 +72,13 @@ describe('StoryService', () => {
       sourceType: SourceType.TEXT,
       status: StoryStatus.READY,
       visibility: StoryVisibility.PRIVATE,
+      era: StoryEra.UNSPECIFIED,
+      year: null,
+      location: null,
+      civilization: StoryCivilization.UNSPECIFIED,
+      customCivilization: null,
+      theme: StoryTheme.UNSPECIFIED,
+      customTheme: null,
       createdAt: new Date('2026-01-01T00:00:00Z'),
       updatedAt: new Date('2026-01-02T00:00:00Z'),
     });
@@ -165,6 +180,7 @@ describe('StoryService', () => {
         { provide: getRepositoryToken(Notification), useValue: {} },
         { provide: getDataSourceToken(), useValue: dataSource },
         { provide: StoryParserService, useValue: parser },
+        { provide: StoryContextService, useClass: StoryContextService },
         { provide: PdfParserService, useValue: pdfParser },
         { provide: StoryAccessService, useValue: accessService },
         { provide: IllustrationStatusService, useValue: statusService },
@@ -348,6 +364,130 @@ describe('StoryService', () => {
       await service.create('u-1', { title: 'T', text: 'x' } as any);
 
       expect(cache.bust).toHaveBeenCalled();
+    });
+
+    it('normalizes and stores the Story Context separately from content', async () => {
+      parser.parse.mockReturnValue({
+        title: 'T',
+        language: 'en',
+        sections: [{ order: 1, text: 'x' }],
+      });
+      const fullStory = makeStory();
+      storyRepo.create.mockReturnValue(fullStory);
+      storyRepo.save.mockResolvedValue(fullStory);
+      pageRepo.save.mockResolvedValue([]);
+
+      await service.create('u-1', {
+        title: 'T',
+        text: 'raw content',
+        era: StoryEra.BCE,
+        year: 1250,
+        location: '  Thebes, Egypt ',
+        civilization: StoryCivilization.ANCIENT_EGYPTIAN,
+        theme: StoryTheme.ADVENTURE,
+      } as any);
+
+      expect(storyRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          era: StoryEra.BCE,
+          year: 1250,
+          location: 'Thebes, Egypt',
+          civilization: StoryCivilization.ANCIENT_EGYPTIAN,
+          theme: StoryTheme.ADVENTURE,
+        }),
+      );
+      // The raw content remains untouched / separate.
+      expect(storyRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ originalText: 'raw content' }),
+      );
+    });
+
+    it('stores custom civilization and theme when CUSTOM', async () => {
+      parser.parse.mockReturnValue({
+        title: 'T',
+        language: 'en',
+        sections: [{ order: 1, text: 'x' }],
+      });
+      const fullStory = makeStory();
+      storyRepo.create.mockReturnValue(fullStory);
+      storyRepo.save.mockResolvedValue(fullStory);
+      pageRepo.save.mockResolvedValue([]);
+
+      await service.create('u-1', {
+        title: 'T',
+        text: 'x',
+        civilization: StoryCivilization.CUSTOM,
+        customCivilization: 'Nubian Civilization',
+        theme: StoryTheme.CUSTOM,
+        customTheme: 'Political drama',
+      } as any);
+
+      expect(storyRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          civilization: StoryCivilization.CUSTOM,
+          customCivilization: 'Nubian Civilization',
+          theme: StoryTheme.CUSTOM,
+          customTheme: 'Political drama',
+        }),
+      );
+    });
+  });
+
+  describe('story context update & security', () => {
+    it('allows the owner to update the Story Context (normalizes values)', async () => {
+      const story = makeStory();
+      storyRepo.findOne.mockResolvedValue(story);
+      storyRepo.save.mockResolvedValue(story);
+
+      await service.update('u-1', 's-1', {
+        location: ' Rome, Italy ',
+        era: StoryEra.CE,
+        year: 120,
+      } as any);
+
+      expect(story.era).toBe(StoryEra.CE);
+      expect(story.year).toBe(120);
+      expect(story.location).toBe('Rome, Italy');
+      expect(storyRepo.save).toHaveBeenCalledWith(story);
+    });
+
+    it('treats custom civilization ignorable when not CUSTOM', async () => {
+      const story = makeStory();
+      storyRepo.findOne.mockResolvedValue(story);
+      storyRepo.save.mockResolvedValue(story);
+
+      await service.update('u-1', 's-1', {
+        civilization: StoryCivilization.GREEK,
+        customCivilization: 'should be ignored',
+      } as any);
+
+      expect(story.civilization).toBe(StoryCivilization.GREEK);
+      expect(story.customCivilization).toBeNull();
+    });
+
+    it('requires custom civilization when CUSTOM (rejects)', async () => {
+      const story = makeStory();
+      storyRepo.findOne.mockResolvedValue(story);
+      storyRepo.save.mockResolvedValue(story);
+
+      await expect(
+        service.update('u-1', 's-1', {
+          civilization: StoryCivilization.CUSTOM,
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(storyRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('prevents an unauthorized user from modifying the Story Context (IDOR)', async () => {
+      const ownedByOther = makeStory({ userId: 'u-2' });
+      storyRepo.findOne.mockResolvedValue(ownedByOther);
+      storyRepo.save.mockResolvedValue(ownedByOther);
+
+      await expect(
+        service.update('u-1', 's-1', { era: StoryEra.BCE } as any),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ownedByOther.era).not.toBe(StoryEra.BCE);
+      expect(storyRepo.save).not.toHaveBeenCalled();
     });
   });
 

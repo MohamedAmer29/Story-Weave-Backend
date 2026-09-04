@@ -3,6 +3,7 @@ import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
 import { STORY_TYPE_LABELS } from '../../common/constants/story-type.constants';
 import { GenreVisualStyleService } from './genre-visual-style.service';
+import { StoryContextPromptService } from './story-context-prompt.service';
 import { StoryLanguage } from '../../common/enums/story-language.enum';
 
 const LANGUAGE_THEMES: Record<string, { visualGuidance: string }> = {
@@ -38,6 +39,7 @@ export class ScenePromptService {
 
   constructor(
     private readonly genreVisualStyleService: GenreVisualStyleService,
+    private readonly storyContextPromptService: StoryContextPromptService,
   ) {}
 
   buildImagePrompt(
@@ -64,6 +66,10 @@ export class ScenePromptService {
     if (subject) {
       parts.push(`Story section:\n${subject}`);
     }
+
+    // Historical & visual context are optional additions layered on top of the
+    // authoritative story content. They must never override the narrative.
+    this.appendStoryContext(parts, story);
 
     // Genre controls visual treatment; story content stays authoritative.
     const genreGuidance = this.genreVisualStyleService.getVisualGuidance(
@@ -94,7 +100,7 @@ export class ScenePromptService {
 
     const prompt = parts.join('\n\n').trim();
     this.logger.debug(`Generated image prompt for page ${page.pageNumber}`);
-    return this.truncatePrompt(prompt);
+    return this.finalizePrompt(prompt);
   }
 
   buildCoverPrompt(story: Story): string {
@@ -128,6 +134,8 @@ export class ScenePromptService {
       parts.push(`Story summary: ${snippet}...`);
     }
 
+    this.appendStoryContext(parts, story);
+
     const genreGuidance = this.genreVisualStyleService.getVisualGuidance(
       story.storyType,
     );
@@ -149,6 +157,38 @@ export class ScenePromptService {
 
     const prompt = parts.join('\n\n').trim();
     this.logger.debug('Generated cover prompt');
+    return this.finalizePrompt(prompt);
+  }
+
+  /**
+   * Appends the optional Story Context (historical/visual guidance) as a
+   * clearly-separated, droppable block. It is framed as context and never as a
+   * system-level instruction.
+   */
+  private appendStoryContext(parts: string[], story: Story): void {
+    const context = this.storyContextPromptService.buildContext(story);
+    const civilization = this.storyContextPromptService.buildCivilizationGuidance(
+      story,
+    );
+    const theme = this.storyContextPromptService.buildThemeGuidance(story);
+
+    const block: string[] = [];
+    if (context) {
+      block.push(context);
+    }
+    if (civilization) {
+      block.push(`Civilization visual guidance: ${civilization}`);
+    }
+    if (theme) {
+      block.push(`Theme visual guidance: ${theme}`);
+    }
+
+    if (block.length > 0) {
+      parts.push(block.join('\n'));
+    }
+  }
+
+  private finalizePrompt(prompt: string): string {
     return this.truncatePrompt(prompt);
   }
 

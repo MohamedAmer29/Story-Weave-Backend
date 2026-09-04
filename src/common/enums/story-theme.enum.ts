@@ -1,0 +1,17 @@
+export enum StoryTheme {
+  FANTASY = 'FANTASY',
+  HISTORICAL = 'HISTORICAL',
+  ADVENTURE = 'ADVENTURE',
+  ROMANCE = 'ROMANCE',
+  MYSTERY = 'MYSTERY',
+  WAR = 'WAR',
+  HORROR = 'HORROR',
+  COMEDY = 'COMEDY',
+  DRAMA = 'DRAMA',
+  MYTHOLOGY = 'MYTHOLOGY',
+  RELIGIOUS = 'RELIGIOUS',
+  CUSTOM = 'CUSTOM',
+  UNSPECIFIED = 'UNSPECIFIED',
+}
+
+export const STORY_THEME_VALUES: StoryTheme[] = Object.values(StoryTheme);

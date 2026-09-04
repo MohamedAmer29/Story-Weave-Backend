@@ -50,7 +50,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
   describe('1000-character segmentation rule', () => {
     it('250 characters creates 1 page', async () => {
       const text = buildTextOfLength(250);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -71,7 +71,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('500 characters creates 1 page', async () => {
       const text = buildTextOfLength(500);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -92,7 +92,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('1000 characters creates 1 page', async () => {
       const text = buildTextOfLength(1000);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -113,7 +113,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('1001 characters splits at word boundary', async () => {
       const text = buildTextOfLength(1001);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -131,7 +131,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
       // 1001 chars should split into 2 pages (since it exceeds 1000)
       expect(storyRes.body.stats.totalPages).toBeGreaterThanOrEqual(1);
-      
+
       // Verify no page ends with a partially split word
       const pages = storyRes.body.pages;
       pages.forEach((page: any) => {
@@ -142,7 +142,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('2000 characters creates 2 pages', async () => {
       const text = buildTextOfLength(2000);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -163,7 +163,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('1050 characters (50 remainder) creates 1 page', async () => {
       const text = buildTextOfLength(1050);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -185,7 +185,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('1051 characters (51 remainder) creates 2 pages', async () => {
       const text = buildTextOfLength(1051);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -207,7 +207,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('2050 characters (50 remainder) creates 2 pages', async () => {
       const text = buildTextOfLength(2050);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -228,7 +228,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('2051 characters (51 remainder) creates 3 pages', async () => {
       const text = buildTextOfLength(2051);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -251,7 +251,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
   describe('Word integrity', () => {
     it('does not split words at page boundaries', async () => {
       const text = 'word '.repeat(200); // 1000 characters
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)
@@ -279,7 +279,7 @@ describe('Story Segmentation E2E (1000-char + <=50-char remainder rule)', () => 
 
     it('preserves all characters after reconstruction', async () => {
       const originalText = buildTextOfLength(1500);
-      
+
       const res = await request(app.getHttpServer())
         .post('/api/stories')
         .set('Authorization', `Bearer ${authToken}`)

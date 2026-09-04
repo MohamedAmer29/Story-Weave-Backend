@@ -25,7 +25,9 @@ describe('Neuron Protection E2E (9500 threshold)', () => {
     redisService = app.get('RedisService');
     const client = redisService.getClient();
     if (client) {
-      await client.del('ai:usage:neurons:' + new Date().toISOString().split('T')[0]);
+      await client.del(
+        'ai:usage:neurons:' + new Date().toISOString().split('T')[0],
+      );
     }
   });
 
@@ -134,9 +136,9 @@ describe('Neuron Protection E2E (9500 threshold)', () => {
       ];
 
       const responses = await Promise.all(requests);
-      
+
       // All should see the same blocked state
-      responses.forEach(res => {
+      responses.forEach((res) => {
         expect(res.status).toBe(200);
         expect(res.body.used).toBe(9400);
         expect(res.body.remaining).toBe(100);

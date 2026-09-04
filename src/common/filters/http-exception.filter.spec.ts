@@ -1,4 +1,8 @@
-import { HttpException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  HttpException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { HttpExceptionFilter } from './http-exception.filter';
 
 describe('HttpExceptionFilter', () => {
@@ -33,7 +37,9 @@ describe('HttpExceptionFilter', () => {
   });
 
   it('returns a generic 500 for non-Http exceptions without leaking internals', () => {
-    const err = new Error('connection to postgresql://user:superSecret@host/db failed');
+    const err = new Error(
+      'connection to postgresql://user:superSecret@host/db failed',
+    );
     filter.catch(err, makeHost());
 
     expect(response.status).toHaveBeenCalledWith(500);
@@ -66,7 +72,7 @@ describe('HttpExceptionFilter', () => {
         'REDACT: private db connection string leaked here',
         // Simulate an unknown 5xx HttpException so we treat it as an internal error
         500,
-      ) as any,
+      ),
       makeHost(),
     );
 
@@ -75,13 +81,13 @@ describe('HttpExceptionFilter', () => {
   });
 
   it('returns validation array messages from a BadRequestException', () => {
-    const validation = new BadRequestException(['title must be shorter', 'text is required']);
-    filter.catch(validation, makeHost());
-
-    const body = response.json.mock.calls[0][0];
-    expect(body.message).toEqual([
+    const validation = new BadRequestException([
       'title must be shorter',
       'text is required',
     ]);
+    filter.catch(validation, makeHost());
+
+    const body = response.json.mock.calls[0][0];
+    expect(body.message).toEqual(['title must be shorter', 'text is required']);
   });
 });

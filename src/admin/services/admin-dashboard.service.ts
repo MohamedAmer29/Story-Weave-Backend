@@ -24,84 +24,68 @@ export class AdminDashboardService {
   ) {}
 
   async getSummary() {
-    const [
-      userStats,
-      storyStats,
-      storyVis,
-      pageCounts,
-      failedPages,
-      processingCount,
-      recentUsers,
-    ] = await Promise.all([
-      this.userRepository
-        .createQueryBuilder('user')
-        .select('user.role', 'role')
-        .addSelect('COUNT(*)', 'count')
-        .addSelect(
-          `COUNT(*) FILTER (WHERE user.isActive = true)`,
-          'active',
-        )
-        .groupBy('user.role')
-        .getRawMany(),
-      this.storyRepository
-        .createQueryBuilder('story')
-        .select('story.status', 'status')
-        .addSelect('COUNT(*)', 'count')
-        .groupBy('story.status')
-        .getRawMany(),
-      this.storyRepository
-        .createQueryBuilder('story')
-        .select('story.visibility', 'visibility')
-        .addSelect('COUNT(*)', 'count')
-        .groupBy('story.visibility')
-        .getRawMany(),
-      this.storyPageRepository
-        .createQueryBuilder('page')
-        .select('COUNT(*)', 'total')
-        .addSelect(
-          `COUNT(*) FILTER (WHERE page.imageStatus = :completed)`,
-          'completed',
-        )
-        .addSelect(
-          `COUNT(*) FILTER (WHERE page.imageStatus = :failed)`,
-          'failed',
-        )
-        .addSelect(
-          `COUNT(*) FILTER (WHERE page.imageStatus IN (:...inFlight))`,
-          'inFlight',
-        )
-        .setParameters({
-          completed: IllustrationPageStatus.COMPLETED,
-          failed: IllustrationPageStatus.FAILED,
-          inFlight: [
-            IllustrationPageStatus.QUEUED,
-            IllustrationPageStatus.GENERATING,
-            IllustrationPageStatus.UPLOADING,
-          ],
-        })
-        .getRawOne(),
-      this.storyPageRepository.count({
-        where: { imageStatus: IllustrationPageStatus.FAILED },
-      }),
-      this.storyRepository.count({
-        where: { status: StoryStatus.PROCESSING },
-      }),
-      this.userRepository
-        .createQueryBuilder('user')
-        .orderBy('user.createdAt', 'DESC')
-        .take(5)
-        .select([
-          'user.id',
-          'user.firstName',
-          'user.lastName',
-          'user.name',
-          'user.email',
-          'user.role',
-          'user.isActive',
-          'user.createdAt',
-        ])
-        .getMany(),
-    ]);
+    const [userStats, storyStats, storyVis, pageCounts, recentUsers] =
+      await Promise.all([
+        this.userRepository
+          .createQueryBuilder('user')
+          .select('user.role', 'role')
+          .addSelect('COUNT(*)', 'count')
+          .addSelect(`COUNT(*) FILTER (WHERE user.isActive = true)`, 'active')
+          .groupBy('user.role')
+          .getRawMany(),
+        this.storyRepository
+          .createQueryBuilder('story')
+          .select('story.status', 'status')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('story.status')
+          .getRawMany(),
+        this.storyRepository
+          .createQueryBuilder('story')
+          .select('story.visibility', 'visibility')
+          .addSelect('COUNT(*)', 'count')
+          .groupBy('story.visibility')
+          .getRawMany(),
+        this.storyPageRepository
+          .createQueryBuilder('page')
+          .select('COUNT(*)', 'total')
+          .addSelect(
+            `COUNT(*) FILTER (WHERE page.imageStatus = :completed)`,
+            'completed',
+          )
+          .addSelect(
+            `COUNT(*) FILTER (WHERE page.imageStatus = :failed)`,
+            'failed',
+          )
+          .addSelect(
+            `COUNT(*) FILTER (WHERE page.imageStatus IN (:...inFlight))`,
+            'inFlight',
+          )
+          .setParameters({
+            completed: IllustrationPageStatus.COMPLETED,
+            failed: IllustrationPageStatus.FAILED,
+            inFlight: [
+              IllustrationPageStatus.QUEUED,
+              IllustrationPageStatus.GENERATING,
+              IllustrationPageStatus.UPLOADING,
+            ],
+          })
+          .getRawOne(),
+        this.userRepository
+          .createQueryBuilder('user')
+          .orderBy('user.createdAt', 'DESC')
+          .take(5)
+          .select([
+            'user.id',
+            'user.firstName',
+            'user.lastName',
+            'user.name',
+            'user.email',
+            'user.role',
+            'user.isActive',
+            'user.createdAt',
+          ])
+          .getMany(),
+      ]);
 
     const countByRole = (role: UserRole) =>
       userStats.find((r) => r.role === role)?.count
@@ -130,6 +114,11 @@ export class AdminDashboardService {
         : 0;
 
     const aiUsage = await this.usageService.getUsageStatus();
+
+    // These values are derived from the GROUP BY aggregates above, avoiding
+    // redundant COUNT(*) round-trips.
+    const failedPages = Number(pageCounts?.failed) || 0;
+    const processingCount = storyCountFor(StoryStatus.PROCESSING);
 
     return {
       users: {

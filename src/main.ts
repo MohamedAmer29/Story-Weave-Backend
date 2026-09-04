@@ -30,6 +30,11 @@ async function bootstrap() {
   const corsCredentials = configService.get<boolean>('cors.credentials', true);
   const isProduction =
     configService.get<string>('app.environment') === 'production';
+  // Swagger is exposed only when explicitly enabled via SWAGGER_ENABLED=true, or
+  // by default in non-production environments. In production it stays off unless
+  // deliberately switched on (avoids an unrestricted public API reference).
+  const swaggerEnabled =
+    configService.get<boolean>('app.swaggerEnabled', false) || !isProduction;
 
   app.setGlobalPrefix(apiPrefix);
 
@@ -78,26 +83,28 @@ async function bootstrap() {
   });
 
   // Swagger documentation
-  const config = new DocumentBuilder()
-    .setTitle('AI Stories API')
-    .setDescription(
-      'AI-powered illustrated story platform API\n\n' +
-        'Every response includes an `x-request-id` correlation header that can be ' +
-        'supplied by clients (and is echoed in error payloads) for tracing.',
-    )
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addCookieAuth('refresh_token')
-    .addGlobalParameters({
-      name: 'x-request-id',
-      in: 'header',
-      required: false,
-      schema: { type: 'string' },
-      description: 'Optional correlation ID for request tracing',
-    })
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('AI Stories API')
+      .setDescription(
+        'AI-powered illustrated story platform API\n\n' +
+          'Every response includes an `x-request-id` correlation header that can be ' +
+          'supplied by clients (and is echoed in error payloads) for tracing.',
+      )
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addCookieAuth('refresh_token')
+      .addGlobalParameters({
+        name: 'x-request-id',
+        in: 'header',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Optional correlation ID for request tracing',
+      })
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   // Bare-root health/hello endpoint (outside the API prefix)
   const httpAdapter = app.getHttpAdapter();
@@ -122,8 +129,10 @@ async function bootstrap() {
   console.log(
     `Application is running on: http://localhost:${port}/${apiPrefix}`,
   );
-  console.log(
-    `Swagger documentation: http://localhost:${port}/${apiPrefix}/docs`,
-  );
+  if (swaggerEnabled) {
+    console.log(
+      `Swagger documentation: http://localhost:${port}/${apiPrefix}/docs`,
+    );
+  }
 }
 bootstrap();

@@ -8,7 +8,13 @@ export class HealthController {
 
   @Get()
   @Public()
-  check() {
-    return this.healthService.check();
+  liveness() {
+    return this.healthService.liveness();
+  }
+
+  @Get('ready')
+  @Public()
+  async readiness() {
+    return this.healthService.readiness();
   }
 }

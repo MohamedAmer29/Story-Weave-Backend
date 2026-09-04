@@ -119,6 +119,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     const REDACTION_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+      // URI connection strings: scheme://user:password@host - redact the authority
+      // (covers postgres/redis connection errors that can leak credentials).
+      [/(\/\/)([^:\/]+):([^@\/\s]+)@/g, '$1<redacted>:<redacted>@'],
       [/(password\s*[:=]?\s*)(\S+)/gi, '$1<redacted>'],
       [/(authorization\s*[:=]?\s*)(\S+)/gi, '$1<redacted>'],
       [/(bearer\s+)(\S+)/gi, '$1<redacted>'],

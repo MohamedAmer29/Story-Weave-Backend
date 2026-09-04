@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis as IORedis } from 'ioredis';
 
 @Injectable()
-export class RedisService {
+export class RedisService implements OnApplicationShutdown {
   private client: IORedis | null = null;
 
   constructor(private readonly configService: ConfigService) {}
@@ -71,6 +71,11 @@ export class RedisService {
   async disconnect(): Promise<void> {
     if (this.client) {
       await this.client.quit();
+      this.client = null;
     }
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.disconnect();
   }
 }

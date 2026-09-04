@@ -124,7 +124,7 @@ describe('StoryContextPromptService', () => {
         }),
       );
       expect(g).toContain('Nubian Civilization');
-      expect(g).toContain('Culture');
+      expect(g).toContain('Cultural context');
     });
 
     it('returns null for unspecified civilization', () => {

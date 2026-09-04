@@ -291,6 +291,68 @@ export class StoryController {
           type: 'string',
           description: 'Optional story language (ARABIC or ENGLISH)',
         },
+        era: {
+          type: 'string',
+          enum: ['BCE', 'CE', 'MODERN', 'UNSPECIFIED'],
+          description: 'Optional historical era of the story',
+        },
+        year: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 10000,
+          description:
+            'Optional year, interpreted together with `era` (e.g. 1250 for 1250 BCE)',
+        },
+        location: {
+          type: 'string',
+          maxLength: 200,
+          description: 'Optional historical/geographical location',
+        },
+        civilization: {
+          type: 'string',
+          enum: [
+            'ARABIC',
+            'EGYPTIAN',
+            'ANCIENT_EGYPTIAN',
+            'GREEK',
+            'ROMAN',
+            'CUSTOM',
+            'UNSPECIFIED',
+          ],
+          description:
+            'Optional civilization. `EGYPTIAN` and `ANCIENT_EGYPTIAN` are separate.',
+        },
+        customCivilization: {
+          type: 'string',
+          maxLength: 100,
+          description:
+            'Required only when `civilization` is CUSTOM. Framed as contextual metadata.',
+        },
+        theme: {
+          type: 'string',
+          enum: [
+            'FANTASY',
+            'HISTORICAL',
+            'ADVENTURE',
+            'ROMANCE',
+            'MYSTERY',
+            'WAR',
+            'HORROR',
+            'COMEDY',
+            'DRAMA',
+            'MYTHOLOGY',
+            'RELIGIOUS',
+            'CUSTOM',
+            'UNSPECIFIED',
+          ],
+          description: 'Optional story theme controlling illustration style',
+        },
+        customTheme: {
+          type: 'string',
+          maxLength: 100,
+          description:
+            'Required only when `theme` is CUSTOM. Framed as contextual metadata.',
+        },
       },
       required: ['file', 'storyType'],
     },

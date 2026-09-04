@@ -167,11 +167,9 @@ export class ScenePromptService {
    */
   private appendStoryContext(parts: string[], story: Story): void {
     const context = this.storyContextPromptService.buildContext(story);
-    const civilization = this.storyContextPromptService.buildCivilizationGuidance(
-      story,
-    );
+    const civilization =
+      this.storyContextPromptService.buildCivilizationGuidance(story);
     const theme = this.storyContextPromptService.buildThemeGuidance(story);
-
     const block: string[] = [];
     if (context) {
       block.push(context);

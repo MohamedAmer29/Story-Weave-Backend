@@ -11,6 +11,7 @@ import { StoryShare } from './entities/story-share.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/notification.entity';
 import { AuditLog } from '../admin/entities/audit-log.entity';
+import { InitialSchema1720000000000 } from './migrations/1720000000000-initial-schema';
 import { StoryContext1739990000000 } from './migrations/1739990000000-story-context';
 
 export default new DataSource({
@@ -29,7 +30,7 @@ export default new DataSource({
     Notification,
     AuditLog,
   ],
-  migrations: [StoryContext1739990000000],
+  migrations: [InitialSchema1720000000000, StoryContext1739990000000],
   synchronize: false,
   logging: false,
 });

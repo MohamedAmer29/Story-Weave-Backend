@@ -28,18 +28,13 @@ const THEME_VISUAL: Partial<Record<StoryTheme, string>> = {
     'authentic historical atmosphere, period-appropriate setting',
   [StoryTheme.ADVENTURE]:
     'adventurous cinematic atmosphere, exploration and dynamic composition',
-  [StoryTheme.ROMANCE]:
-    'emotional and romantic visual atmosphere',
-  [StoryTheme.MYSTERY]:
-    'mysterious atmosphere, suspenseful composition',
+  [StoryTheme.ROMANCE]: 'emotional and romantic visual atmosphere',
+  [StoryTheme.MYSTERY]: 'mysterious atmosphere, suspenseful composition',
   [StoryTheme.WAR]:
     'dramatic conflict atmosphere, historically appropriate setting',
-  [StoryTheme.HORROR]:
-    'dark, unsettling atmosphere appropriate to the story',
-  [StoryTheme.COMEDY]:
-    'light, playful and expressive atmosphere',
-  [StoryTheme.DRAMA]:
-    'emotional, intense dramatic atmosphere',
+  [StoryTheme.HORROR]: 'dark, unsettling atmosphere appropriate to the story',
+  [StoryTheme.COMEDY]: 'light, playful and expressive atmosphere',
+  [StoryTheme.DRAMA]: 'emotional, intense dramatic atmosphere',
   [StoryTheme.MYTHOLOGY]:
     'mythological atmosphere and appropriate legendary elements',
   [StoryTheme.RELIGIOUS]:
@@ -52,7 +47,10 @@ function isMeaningful(value: string | null | undefined): boolean {
   return value !== null && value !== undefined && value.trim().length > 0;
 }
 
-function formatYear(era: StoryEra, year: number | null | undefined): string | null {
+function formatYear(
+  era: StoryEra,
+  year: number | null | undefined,
+): string | null {
   if (era === StoryEra.UNSPECIFIED || era === StoryEra.MODERN) {
     return null;
   }
@@ -118,20 +116,21 @@ export class StoryContextPromptService {
     if (!story.civilization) {
       return null;
     }
+    // Custom civilizations have no fixed visual definition, so we frame the
+    // user-supplied value as cultural context rather than a system instruction.
+    if (story.civilization === StoryCivilization.CUSTOM) {
+      const custom = story.customCivilization?.trim();
+      if (!custom || custom.length === 0) {
+        return null;
+      }
+      return `Cultural context for ${custom.slice(0, 100)}. Reflect this civilization's architecture, clothing, materials, environment, and cultural details where they do not contradict the story.`;
+    }
     const builder = CIVILIZATION_VISUAL[story.civilization];
     if (!builder) {
       return null;
     }
     const yearLabel = formatYear(story.era, story.year);
-    const guidance = builder(yearLabel ?? undefined);
-    if (!guidance) {
-      return null;
-    }
-    if (story.civilization === StoryCivilization.CUSTOM && story.customCivilization) {
-      const custom = story.customCivilization.trim().slice(0, 100);
-      return `Cultural context for ${custom}: ${guidance}`;
-    }
-    return guidance;
+    return builder(yearLabel ?? undefined);
   }
 
   /**

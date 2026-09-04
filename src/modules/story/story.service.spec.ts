@@ -14,6 +14,7 @@ import { NotificationType } from '../../notifications/notification-type.enum';
 import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { StoryStatus } from '../../common/enums/story-status.enum';
 import { SourceType } from '../../common/enums/source-type.enum';
+import { StoryType } from '../../common/enums/story-type.enum';
 import { StoryEra } from '../../common/enums/story-era.enum';
 import { StoryCivilization } from '../../common/enums/story-civilization.enum';
 import { StoryTheme } from '../../common/enums/story-theme.enum';
@@ -488,6 +489,82 @@ describe('StoryService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(ownedByOther.era).not.toBe(StoryEra.BCE);
       expect(storyRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createFromPdf story context', () => {
+    it('normalizes and stores the Story Context on PDF-created stories', async () => {
+      pdfParser.extractText.mockResolvedValue('Some extracted PDF text.');
+      parser.parse.mockReturnValue({
+        title: 'PDF Story',
+        language: 'en',
+        sections: [{ order: 1, text: 'x' }],
+      });
+      const pdfStory = makeStory();
+      storyRepo.create.mockReturnValue(pdfStory);
+      storyRepo.save.mockResolvedValue(pdfStory);
+      pageRepo.save.mockResolvedValue([]);
+
+      const file = {
+        buffer: Buffer.from('%PDF-1.4 fake'),
+        mimetype: 'application/pdf',
+        originalname: 'story.pdf',
+        size: 100,
+      } as Express.Multer.File;
+
+      await service.createFromPdf('u-1', file, {
+        storyType: StoryType.HISTORICAL,
+        era: StoryEra.CE,
+        year: 120,
+        location: ' Rome, Italy ',
+        civilization: StoryCivilization.ROMAN,
+        theme: StoryTheme.WAR,
+      } as any);
+
+      expect(storyRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceType: SourceType.PDF,
+          era: StoryEra.CE,
+          year: 120,
+          location: 'Rome, Italy',
+          civilization: StoryCivilization.ROMAN,
+          theme: StoryTheme.WAR,
+        }),
+      );
+    });
+
+    it('defaults Story Context to UNSPECIFIED/null when no context is sent', async () => {
+      pdfParser.extractText.mockResolvedValue('text');
+      parser.parse.mockReturnValue({
+        title: 'PDF Story',
+        language: 'en',
+        sections: [],
+      });
+      const pdfStory = makeStory();
+      storyRepo.create.mockReturnValue(pdfStory);
+      storyRepo.save.mockResolvedValue(pdfStory);
+      pageRepo.save.mockResolvedValue([]);
+
+      const file = {
+        buffer: Buffer.from('%PDF-1.4 fake'),
+        mimetype: 'application/pdf',
+        originalname: 'story.pdf',
+        size: 100,
+      } as Express.Multer.File;
+
+      await service.createFromPdf('u-1', file, {
+        storyType: StoryType.HISTORICAL,
+      } as any);
+
+      expect(storyRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          era: StoryEra.UNSPECIFIED,
+          year: null,
+          location: null,
+          civilization: StoryCivilization.UNSPECIFIED,
+          theme: StoryTheme.UNSPECIFIED,
+        }),
+      );
     });
   });
 

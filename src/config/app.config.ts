@@ -5,4 +5,5 @@ export default registerAs('app', () => ({
   apiPrefix: process.env.API_PREFIX || 'api',
   environment: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  swaggerEnabled: process.env.SWAGGER_ENABLED === 'true',
 }));

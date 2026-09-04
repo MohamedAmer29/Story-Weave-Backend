@@ -18,6 +18,7 @@ import { PageStatus } from '../../common/enums/page-status.enum';
 import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
+import { UploadPdfDto } from './dto/upload-pdf.dto';
 import { StoryQueryDto } from './dto/story-query.dto';
 import {
   StoryResponseDto,
@@ -529,7 +530,7 @@ export class StoryService {
   async createFromPdf(
     userId: string,
     file: Express.Multer.File,
-    body?: { storyType?: any; visualStyle?: string; language?: string },
+    body?: UploadPdfDto,
   ): Promise<StoryResponseDto> {
     this.logger.log(`Creating story from PDF for user: ${userId}`);
 
@@ -574,6 +575,8 @@ export class StoryService {
 
       const parsedStory = this.storyParserService.parse(extractedText);
 
+      const context = this.storyContextService.normalize(body ?? {});
+
       const story = this.storyRepository.create({
         userId,
         title: parsedStory.title,
@@ -588,6 +591,7 @@ export class StoryService {
           undefined,
         storyType: body?.storyType ?? undefined,
         visualStyle: body?.visualStyle ?? undefined,
+        ...this.contextToEntity(context),
       });
 
       await this.storyRepository.save(story);

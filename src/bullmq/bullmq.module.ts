@@ -1,7 +1,19 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Inject, Injectable, Module, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { BULLMQ_CONNECTION } from './bullmq.constants';
+
+@Injectable()
+class BullMQConnectionLifecycle implements OnApplicationShutdown {
+  constructor(
+    @Inject(BULLMQ_CONNECTION)
+    private readonly connection: Redis,
+  ) {}
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.connection.disconnect();
+  }
+}
 
 @Global()
 @Module({
@@ -31,6 +43,7 @@ import { BULLMQ_CONNECTION } from './bullmq.constants';
       },
       inject: [ConfigService],
     },
+    BullMQConnectionLifecycle,
   ],
   exports: [BULLMQ_CONNECTION],
 })

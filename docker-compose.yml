@@ -1,0 +1,155 @@
+name: ai-stories-backend
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      POSTGRES_DB: ${DATABASE_NAME:-ai_stories}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-postgres} -d ${DATABASE_NAME:-ai_stories}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend
+    # PostgreSQL is not exposed to the host by default. Uncomment the ports
+    # block only for local debugging:
+    # ports:
+    #   - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Redis keeps its data on a persistent volume so BullMQ state and neuron
+    # accounting survive restarts.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - backend
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_PREFIX: ${API_PREFIX:-api}
+      # Database
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-ai_stories}
+      DATABASE_URL: postgres://${DATABASE_USERNAME:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/${DATABASE_NAME:-ai_stories}
+      DATABASE_SYNCHRONIZE: "false"
+      DATABASE_LOGGING: "false"
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_URL: redis://redis:6379
+      # JWT / Auth
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      AUTH_REFRESH_EXPIRES_IN_DAYS: ${AUTH_REFRESH_EXPIRES_IN_DAYS:-7}
+      AUTH_REFRESH_REMEMBER_ME_DAYS: ${AUTH_REFRESH_REMEMBER_ME_DAYS:-30}
+      AUTH_RESET_TOKEN_EXPIRES_IN: ${AUTH_RESET_TOKEN_EXPIRES_IN:-15m}
+      # OTP
+      OTP_EXPIRES_IN_MINUTES: ${OTP_EXPIRES_IN_MINUTES:-10}
+      OTP_MAX_ATTEMPTS: ${OTP_MAX_ATTEMPTS:-5}
+      OTP_RESEND_COOLDOWN_SECONDS: ${OTP_RESEND_COOLDOWN_SECONDS:-60}
+      # Email
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      # Initial admin
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # Cloudinary
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      # Cloudflare AI
+      AI_PROVIDER: ${AI_PROVIDER:-cloudflare}
+      AI_MODEL: ${AI_MODEL:-@cf/black-forest-labs/flux-1-schnell}
+      AI_API_KEY: ${AI_API_KEY}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID}
+      AI_DAILY_NEURON_LIMIT: ${AI_DAILY_NEURON_LIMIT:-10000}
+      AI_NEURON_SAFETY_LIMIT: ${AI_NEURON_SAFETY_LIMIT:-9500}
+      AI_NEURON_SAFETY_BUFFER: ${AI_NEURON_SAFETY_BUFFER:-500}
+      AI_IMAGE_CONCURRENCY: ${AI_IMAGE_CONCURRENCY:-2}
+      ILLUSTRATION_WORKER_CONCURRENCY: ${ILLUSTRATION_WORKER_CONCURRENCY:-2}
+      # Notifications
+      NOTIFICATION_RETENTION_DAYS: ${NOTIFICATION_RETENTION_DAYS:-90}
+      NOTIFICATION_CLEANUP_INTERVAL_HOURS: ${NOTIFICATION_CLEANUP_INTERVAL_HOURS:-24}
+      # CORS / Swagger
+      CORS_ENABLED: ${CORS_ENABLED:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-true}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - "${PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - backend
+
+# Migration one-shot service. Run with:
+#   docker compose run --rm migrate
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      DATABASE_NAME: ${DATABASE_NAME:-ai_stories}
+      DATABASE_URL: postgres://${DATABASE_USERNAME:-postgres}:${DATABASE_PASSWORD:-postgres}@postgres:5432/${DATABASE_NAME:-ai_stories}
+    command: ["npm", "run", "migration:run:prod"]
+    profiles: ["migrate"]
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  backend:
+    driver: bridge
+    internal: false

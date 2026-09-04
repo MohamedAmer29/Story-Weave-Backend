@@ -90,4 +90,18 @@ describe('HttpExceptionFilter', () => {
     const body = response.json.mock.calls[0][0];
     expect(body.message).toEqual(['title must be shorter', 'text is required']);
   });
+
+  it('redacts URI credentials (e.g. db connection strings) from the server log', () => {
+    const spy = jest.spyOn((filter as any).logger, 'error');
+    const err = new Error(
+      'connection to postgresql://user:superSecret@host/db failed',
+    );
+    filter.catch(err, makeHost());
+
+    const logLine = spy.mock.calls[0][0] as string;
+    expect(logLine).not.toContain('superSecret');
+    expect(logLine).not.toContain('user:superSecret@');
+    expect(logLine).toContain('postgresql://<redacted>:<redacted>@host/db');
+    spy.mockRestore();
+  });
 });

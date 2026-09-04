@@ -45,11 +45,10 @@ export class StoryContextService {
    */
   normalize(input: StoryContextInput): NormalizedStoryContext {
     const era = input.era ?? StoryEra.UNSPECIFIED;
-    const civilization =
-      input.civilization ?? StoryCivilization.UNSPECIFIED;
+    const civilization = input.civilization ?? StoryCivilization.UNSPECIFIED;
     const theme = input.theme ?? StoryTheme.UNSPECIFIED;
 
-    let location = this.trimOrNull(input.location);
+    const location = this.trimOrNull(input.location);
     let customCivilization = this.trimOrNull(input.customCivilization);
     let customTheme = this.trimOrNull(input.customTheme);
 

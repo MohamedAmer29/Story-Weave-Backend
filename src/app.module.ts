@@ -68,13 +68,25 @@ import { AdminModule } from './admin/admin.module';
           idleTimeoutMs: number;
           statementTimeoutMs: number;
         }>('database.pool')!;
-        return {
-          type: 'postgres' as const,
-          host: configService.get<string>('database.host'),
-          port: configService.get<number>('database.port'),
-          username: configService.get<string>('database.username'),
-          password: configService.get<string>('database.password'),
-          database: configService.get<string>('database.database'),
+          return {
+            type: 'postgres' as const,
+            url: configService.get<string>('database.url') || undefined,
+            host: configService.get<string>('database.host'),
+            port: configService.get<number>('database.port'),
+            username: configService.get<string>('database.username'),
+            password: configService.get<string>('database.password'),
+            database: configService.get<string>('database.database'),
+            // SSL via DATABASE_URL's query params (e.g. ?sslmode=require) is handled
+            // automatically by the driver. For host/port-based connections, honor
+            // DATABASE_SSL / DATABASE_SSL_REJECT_UNAUTHORIZED explicitly.
+            ssl: configService.get<boolean>('database.ssl', false)
+              ? {
+                  rejectUnauthorized: configService.get<boolean>(
+                    'database.sslRejectUnauthorized',
+                    false,
+                  ),
+                }
+              : undefined,
           entities: [
             User,
             Story,

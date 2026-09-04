@@ -25,20 +25,29 @@ class BullMQConnectionLifecycle implements OnApplicationShutdown {
         const host = configService.get<string>('redis.host', 'localhost');
         const port = configService.get<number>('redis.port', 6379);
         const password = configService.get<string>('redis.password');
+        const username = configService.get<string>('redis.username');
+        const tls = configService.get<boolean>('redis.tls', false);
+        const db = configService.get<number>('redis.db', 0);
+
+        const common = {
+          maxRetriesPerRequest: null,
+          enableReadyCheck: false,
+          // Upstash redis:// with REDIS_TLS=true requires TLS; a rediss:// URL always uses TLS.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...(tls ? { tls: {} as any } : {}),
+        };
 
         if (url) {
-          return new Redis(url, {
-            maxRetriesPerRequest: null,
-            enableReadyCheck: false,
-          });
+          return new Redis(url, common);
         }
 
         return new Redis({
           host,
           port,
+          ...(username ? { username } : {}),
           ...(password ? { password } : {}),
-          maxRetriesPerRequest: null,
-          enableReadyCheck: false,
+          ...(db ? { db } : {}),
+          ...common,
         });
       },
       inject: [ConfigService],

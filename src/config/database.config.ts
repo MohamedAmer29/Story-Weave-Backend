@@ -9,6 +9,9 @@ export default registerAs('database', () => ({
   database: process.env.DATABASE_NAME,
   synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',
   logging: process.env.DATABASE_LOGGING === 'true',
+  ssl: process.env.DATABASE_SSL === 'true',
+  sslRejectUnauthorized:
+    process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
   // Connection pool / timeouts (tunable for production sizing).
   pool: {
     max: parseInt(process.env.DATABASE_POOL_MAX || '20', 10),

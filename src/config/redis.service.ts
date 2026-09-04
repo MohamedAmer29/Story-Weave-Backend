@@ -13,13 +13,23 @@ export class RedisService implements OnApplicationShutdown {
     const host = this.configService.get<string>('redis.host', 'localhost');
     const port = this.configService.get<number>('redis.port', 6379);
     const password = this.configService.get<string>('redis.password');
+    const username = this.configService.get<string>('redis.username');
+    const tls = this.configService.get<boolean>('redis.tls', false);
+
+    const common = {
+      // Upstash redis:// with REDIS_TLS=true requires TLS; a rediss:// URL always uses TLS.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(tls ? { tls: {} as any } : {}),
+    };
 
     this.client = url
-      ? new IORedis(url)
+      ? new IORedis(url, common)
       : new IORedis({
           host,
           port,
+          ...(username ? { username } : {}),
           ...(password ? { password } : {}),
+          ...common,
         });
 
     this.client.on('error', (err) => {

@@ -8,6 +8,12 @@ function isProduction(): boolean {
   return (process.env.NODE_ENV || 'development') === 'production';
 }
 
+function hasValue(key: string): boolean {
+  return (
+    process.env[key] !== undefined && String(process.env[key]).trim() !== ''
+  );
+}
+
 export function validateEnvironment(): void {
   if (!isProduction()) {
     return;
@@ -30,7 +36,6 @@ export function validateEnvironment(): void {
   const required = [
     'JWT_SECRET',
     'DATABASE_URL',
-    'REDIS_URL',
     'CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
@@ -41,6 +46,14 @@ export function validateEnvironment(): void {
   const missing = required.filter(
     (key) => !process.env[key] || String(process.env[key]).trim() === '',
   );
+
+  // Redis may be configured via REDIS_URL (e.g. rediss://...) OR a host-based
+  // set (REDIS_HOST + REDIS_PORT, optionally REDIS_TLS/password) as used by Upstash.
+  const hasRedisUrl = hasValue('REDIS_URL');
+  const hasRedisHost = hasValue('REDIS_HOST');
+  if (!hasRedisUrl && !hasRedisHost) {
+    missing.push('REDIS_URL (or REDIS_HOST)');
+  }
 
   if (missing.length > 0) {
     throw new Error(

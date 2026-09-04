@@ -1,0 +1,8 @@
+{
+  "framework": "express",
+  "functions": {
+    "api/index.ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}

@@ -1,6 +1,7 @@
+import { ConfigService } from '@nestjs/config';
+import 'source-map-support/register';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import cookieParser from 'cookie-parser';
@@ -30,9 +31,8 @@ async function bootstrap() {
   const corsCredentials = configService.get<boolean>('cors.credentials', true);
   const isProduction =
     configService.get<string>('app.environment') === 'production';
-  // Swagger is exposed only when explicitly enabled via SWAGGER_ENABLED=true, or
-  // by default in non-production environments. In production it stays off unless
-  // deliberately switched on (avoids an unrestricted public API reference).
+  // Swagger is enabled only when explicitly set via SWAGGER_ENABLED=true, or
+  // by default in non-production environments.
   const swaggerEnabled =
     configService.get<boolean>('app.swaggerEnabled', false) || !isProduction;
 
@@ -135,4 +135,5 @@ async function bootstrap() {
     );
   }
 }
+
 bootstrap();

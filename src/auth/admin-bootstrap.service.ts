@@ -31,26 +31,44 @@ export class AdminBootstrapService implements OnApplicationBootstrap {
         where: { email },
       });
 
-      if (existing) {
-        return;
-      }
-
       const passwordHash = await hash(password, 12);
       const name = email.split('@')[0];
 
-      const admin = this.userRepository.create({
-        email,
-        password: passwordHash,
-        firstName: 'Admin',
-        lastName: 'Admin',
-        name,
-        role: UserRole.ADMIN,
-        isActive: true,
-        emailVerified: true,
-      });
+      if (!existing) {
+        const admin = this.userRepository.create({
+          email,
+          password: passwordHash,
+          firstName: 'Admin',
+          lastName: 'Admin',
+          name,
+          role: UserRole.ADMIN,
+          isActive: true,
+          emailVerified: true,
+        });
 
-      await this.userRepository.save(admin);
-      this.logger.log(`Initial admin account auto-created for ${email}`);
+        await this.userRepository.save(admin);
+        this.logger.log(`Initial admin account auto-created for ${email}`);
+        return;
+      }
+
+      // The admin account already exists; refresh its credentials and role to
+      // reflect any ADMIN_EMAIL / ADMIN_PASSWORD changes made in `.env`.
+      if (
+        existing.password !== passwordHash ||
+        existing.role !== UserRole.ADMIN ||
+        !existing.isActive
+      ) {
+        existing.password = passwordHash;
+        existing.role = UserRole.ADMIN;
+        existing.isActive = true;
+        existing.emailVerified = true;
+        if (!existing.firstName) existing.firstName = 'Admin';
+        if (!existing.lastName) existing.lastName = 'Admin';
+        await this.userRepository.save(existing);
+        this.logger.log(
+          `Admin account synced with configured credentials for ${email}`,
+        );
+      }
     } catch (error) {
       this.logger.error('Failed to bootstrap admin account', error);
     }

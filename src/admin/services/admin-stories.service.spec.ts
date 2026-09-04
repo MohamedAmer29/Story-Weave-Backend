@@ -13,6 +13,7 @@ import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { IllustrationService } from '../../illustration/illustration.service';
+import { AiUsageService } from '../../ai/ai-usage.service';
 
 describe('AdminStoriesService', () => {
   let service: AdminStoriesService;
@@ -27,6 +28,7 @@ describe('AdminStoriesService', () => {
   let cloudinary: { deleteImage: jest.Mock };
   let cache: { bust: jest.Mock };
   let statusService: { computeStatus: jest.Mock };
+  let usageService: { canMakeRequest: jest.Mock };
   let illustrationService: {
     regenerateCover: jest.Mock;
     regeneratePage: jest.Mock;
@@ -86,6 +88,9 @@ describe('AdminStoriesService', () => {
       regenerateCover: jest.fn().mockResolvedValue(undefined),
       regeneratePage: jest.fn().mockResolvedValue(undefined),
     };
+    usageService = {
+      canMakeRequest: jest.fn().mockResolvedValue({ allowed: true }),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -102,6 +107,7 @@ describe('AdminStoriesService', () => {
         { provide: PublicCacheService, useValue: cache },
         { provide: IllustrationStatusService, useValue: statusService },
         { provide: IllustrationService, useValue: illustrationService },
+        { provide: AiUsageService, useValue: usageService },
       ],
     }).compile();
 

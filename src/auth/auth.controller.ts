@@ -150,8 +150,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const refreshToken =
-      this.extractRefreshToken(req) || (req.body && req.body.refreshToken);
+    const refreshToken = this.extractRefreshToken(req);
 
     const result = await this.authService.refreshTokens(
       refreshToken,

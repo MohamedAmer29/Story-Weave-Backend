@@ -1,15 +1,8 @@
 import { ConfigService } from '@nestjs/config';
-import * as fs from 'fs';
-import * as path from 'path';
 import { AIService } from './ai.service';
 import { CloudflareProvider } from './providers/cloudflare.provider';
 import { AiUsageService } from '../../ai/ai-usage.service';
 import { AiUsageLimitExceededException } from '../../ai/ai-usage-limit-exception';
-
-jest.mock('fs', () => ({
-  writeFileSync: jest.fn(),
-  statSync: jest.fn(() => ({ size: 123 })),
-}));
 
 describe('AIService', () => {
   let service: AIService;
@@ -81,14 +74,9 @@ describe('AIService', () => {
       expect(cloudflareProvider.generateImage).toHaveBeenCalledWith(
         'a test prompt',
       );
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        path.join(process.cwd(), 'flux-test.jpg'),
-        Buffer.from('image'),
-      );
       expect(result).toMatchObject({
         success: true,
-        size: 123,
-        file: 'flux-test.jpg',
+        size: Buffer.from('image').length,
       });
     });
 

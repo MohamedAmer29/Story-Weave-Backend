@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { StoryLanguage } from '../../../common/enums/story-language.enum';
 
 export interface StorySection {
@@ -19,7 +19,7 @@ export class StoryParserService {
     this.logger.log('Starting story parsing');
 
     if (!rawText || rawText.trim().length === 0) {
-      throw new Error('Story text cannot be empty');
+      throw new BadRequestException('Story text cannot be empty');
     }
 
     const sections = this.splitIntoSections(rawText);

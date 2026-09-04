@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Story } from '../../database/entities/story.entity';
@@ -16,6 +22,10 @@ import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { IllustrationService } from '../../illustration/illustration.service';
+import { AiUsageService } from '../../ai/ai-usage.service';
+import { AI_MODEL_USAGE } from '../../ai/config/ai-model-usage.config';
+
+const CLOUDFLARE_MODEL_KEY = '@cf/black-forest-labs/flux-1-schnell';
 
 @Injectable()
 export class AdminStoriesService {
@@ -34,6 +44,7 @@ export class AdminStoriesService {
     private readonly publicCacheService: PublicCacheService,
     private readonly illustrationStatusService: IllustrationStatusService,
     private readonly illustrationService: IllustrationService,
+    private readonly usageService: AiUsageService,
   ) {}
 
   async list(query: AdminStoryQueryDto) {
@@ -278,6 +289,20 @@ export class AdminStoriesService {
     }
 
     const userId = story.userId;
+
+    // Fail-fast neuron safety check: an admin retry must still respect the
+    // safety threshold before enqueueing jobs that would be rejected by the
+    // worker. The worker remains the authoritative enforcement layer.
+    const { allowed } = await this.usageService.canMakeRequest(
+      CLOUDFLARE_MODEL_KEY,
+      AI_MODEL_USAGE[CLOUDFLARE_MODEL_KEY]?.neuronsPerRequest ?? 100,
+    );
+    if (!allowed) {
+      throw new HttpException(
+        'AI generation is at capacity; retry is not available right now.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
 
     if (scope === 'cover') {
       await this.illustrationService.regenerateCover(userId, storyId);

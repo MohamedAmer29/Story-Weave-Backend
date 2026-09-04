@@ -11,8 +11,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AIService } from './ai.service';
 import { AiUsageService } from '../../ai/ai-usage.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Public } from '../../common/decorators/public.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../database/entities/user.entity';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { TestImageDto } from './dto/test-image.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
@@ -27,7 +28,8 @@ export class AIController {
   ) {}
 
   @Post('test-image')
-  @Public()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @RateLimit({ ttl: 60, limit: 5 })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate a test image (development only)' })
@@ -44,8 +46,6 @@ export class AIController {
   }
 
   @Get('usage')
-  @UseGuards(JwtAuthGuard)
-  @Public()
   async getUsage() {
     const status = await this.usageService.getUsageStatus();
 
@@ -54,9 +54,6 @@ export class AIController {
       data: {
         dailyLimit: Number(process.env.AI_DAILY_NEURON_LIMIT) || 10000,
         safetyLimit: Number(process.env.AI_NEURON_SAFETY_LIMIT) || 9500,
-        safetyBuffer:
-          (Number(process.env.AI_NEURON_SAFETY_LIMIT) || 9500) -
-          (Number(process.env.AI_DAILY_NEURON_LIMIT) || 10000),
         used: status.used,
         remainingUntilSafetyLimit: status.remaining,
         percentageUsed: status.percentage,
@@ -67,8 +64,6 @@ export class AIController {
   }
 
   @Get('usage/status')
-  @UseGuards(JwtAuthGuard)
-  @Public()
   async getUsageStatus() {
     const status = await this.usageService.getUsageStatus();
 

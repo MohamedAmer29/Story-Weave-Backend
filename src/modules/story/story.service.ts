@@ -35,6 +35,7 @@ import { StoryAccessService } from './services/story-access.service';
 import {
   StoryContextService,
   NormalizedStoryContext,
+  StoryContextInput,
 } from './services/story-context.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
@@ -137,11 +138,17 @@ export class StoryService {
 
     // Access check via EXISTS avoids joining the shares table, which would
     // multiply story rows (and inflate both the count and the result set).
+    // PRIVATE stories are owner-only (matching canAccessStory); SHARED stories
+    // are accessible to explicitly granted users via story_shares.
     const queryBuilder = this.storyRepository
       .createQueryBuilder('story')
       .where(
-        '(story.userId = :userId OR story.visibility = :public OR EXISTS (SELECT 1 FROM story_shares ss WHERE ss."storyId" = story."id" AND ss."userId" = :userId))',
-        { userId, public: StoryVisibility.PUBLIC },
+        '(story.userId = :userId OR story.visibility = :public OR (story.visibility = :shared AND EXISTS (SELECT 1 FROM story_shares ss WHERE ss."storyId" = story."id" AND ss."userId" = :userId)))',
+        {
+          userId,
+          public: StoryVisibility.PUBLIC,
+          shared: StoryVisibility.SHARED,
+        },
       );
 
     if (search) {
@@ -283,6 +290,9 @@ export class StoryService {
       .createQueryBuilder('story')
       .innerJoin('story.shares', 'share')
       .where('share.userId = :userId', { userId })
+      .andWhere('story.visibility = :shared', {
+        shared: StoryVisibility.SHARED,
+      })
       .andWhere('story.userId != :userId', { userId }); // Exclude own stories
 
     if (search) {
@@ -442,17 +452,15 @@ export class StoryService {
 
     // Normalize the Story Context portion of the update before persisting.
     if (this.hasStoryContext(updateStoryDto)) {
-      const context = this.storyContextService.normalize(updateStoryDto);
-      // Merge the normalized context over the entity, then apply the rest of
-      // the DTO, being careful not to let raw context values leak through.
-      delete (updateStoryDto as any).era;
-      delete (updateStoryDto as any).year;
-      delete (updateStoryDto as any).location;
-      delete (updateStoryDto as any).civilization;
-      delete (updateStoryDto as any).customCivilization;
-      delete (updateStoryDto as any).theme;
-      delete (updateStoryDto as any).customTheme;
-      Object.assign(story, this.contextToEntity(context));
+      const context = this.storyContextService.normalize(
+        this.pickContextFields(updateStoryDto),
+      );
+      // Apply only the context fields that were explicitly provided in the
+      // update; untouched context columns are preserved instead of being reset
+      // to their defaults.
+      Object.assign(story, this.contextPatch(updateStoryDto, context));
+      // Strip raw context fields so they don't leak through Object.assign below.
+      this.deleteContextFields(updateStoryDto as any);
     }
 
     Object.assign(story, updateStoryDto);
@@ -482,6 +490,9 @@ export class StoryService {
     const imagePublicIds = story.pages
       .map((page) => page.imagePublicId)
       .filter((pid): pid is string => Boolean(pid));
+    if (story.coverImagePublicId) {
+      imagePublicIds.push(story.coverImagePublicId);
+    }
 
     // Database consistency first: shares, notifications, pages, then the story.
     await this.dataSource.transaction(async (manager) => {
@@ -499,9 +510,11 @@ export class StoryService {
     await this.publicCacheService.bust();
 
     // Best-effort Cloudinary cleanup AFTER the DB operation committed.
-    for (const publicId of imagePublicIds) {
-      await this.cloudinaryService.deleteImage(publicId);
-    }
+    await Promise.allSettled(
+      imagePublicIds.map((publicId) =>
+        this.cloudinaryService.deleteImage(publicId),
+      ),
+    );
 
     this.logger.log(`Story deleted: ${id}`);
   }
@@ -585,10 +598,7 @@ export class StoryService {
         sourceType: SourceType.PDF,
         status: StoryStatus.PROCESSING,
         visibility: StoryVisibility.PRIVATE,
-        language:
-          (body?.language as StoryLanguage) ??
-          parsedStory.language ??
-          undefined,
+        language: body?.language ?? parsedStory.language ?? undefined,
         storyType: body?.storyType ?? undefined,
         visualStyle: body?.visualStyle ?? undefined,
         ...this.contextToEntity(context),
@@ -680,16 +690,56 @@ export class StoryService {
     };
   }
 
+  private static readonly CONTEXT_FIELDS = [
+    'era',
+    'year',
+    'location',
+    'civilization',
+    'customCivilization',
+    'theme',
+    'customTheme',
+  ] as const;
+
+  private pickContextFields(dto: object): StoryContextInput {
+    const picked: Record<string, unknown> = {};
+    for (const field of StoryService.CONTEXT_FIELDS) {
+      if (field in dto) {
+        picked[field] = (dto as Record<string, unknown>)[field];
+      }
+    }
+    return picked;
+  }
+
+  private contextPatch(
+    dto: object,
+    context: NormalizedStoryContext,
+  ): Partial<Story> {
+    const patch: Partial<Story> = {};
+    const mapping: Record<string, keyof NormalizedStoryContext> = {
+      era: 'era',
+      year: 'year',
+      location: 'location',
+      civilization: 'civilization',
+      customCivilization: 'customCivilization',
+      theme: 'theme',
+      customTheme: 'customTheme',
+    };
+    for (const field of StoryService.CONTEXT_FIELDS) {
+      if (field in dto) {
+        (patch as Record<string, unknown>)[field] = context[mapping[field]];
+      }
+    }
+    return patch;
+  }
+
+  private deleteContextFields(dto: Record<string, unknown>): void {
+    for (const field of StoryService.CONTEXT_FIELDS) {
+      delete dto[field];
+    }
+  }
+
   private hasStoryContext(dto: object): boolean {
-    return (
-      'era' in dto ||
-      'year' in dto ||
-      'location' in dto ||
-      'civilization' in dto ||
-      'customCivilization' in dto ||
-      'theme' in dto ||
-      'customTheme' in dto
-    );
+    return StoryService.CONTEXT_FIELDS.some((field) => field in dto);
   }
 
   async updateVisibility(

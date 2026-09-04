@@ -12,7 +12,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../database/entities/user.entity';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdminUsersService } from '../services/admin-users.service';
-import { AdminUserQueryDto, UpdateUserRoleDto } from '../dto/admin-query.dto';
+import {
+  AdminUserQueryDto,
+  UpdateUserRoleDto,
+  UpdateUserActiveDto,
+} from '../dto/admin-query.dto';
 import { Audit } from '../audit/audit.decorator';
 import { AuditInterceptor } from '../audit/audit.interceptor';
 
@@ -60,13 +64,9 @@ export class AdminUsersController {
   async setActive(
     @CurrentUser() actor: { id: string; email?: string },
     @Param('id') id: string,
-    @Body() body: { isActive: string | boolean },
+    @Body() dto: UpdateUserActiveDto,
   ) {
-    const isActive =
-      typeof body.isActive === 'string'
-        ? body.isActive === 'true'
-        : body.isActive === true;
-    const data = await this.usersService.setActive(actor, id, isActive);
+    const data = await this.usersService.setActive(actor, id, dto.isActive);
     return { success: true, data };
   }
 }

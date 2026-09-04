@@ -3,8 +3,6 @@ import { AIProvider } from '../../common/interfaces/ai-provider.interface';
 import { CloudflareProvider } from './providers/cloudflare.provider';
 import { AiUsageService } from '../../ai/ai-usage.service';
 import { ConfigService } from '@nestjs/config';
-import * as fs from 'fs';
-import * as path from 'path';
 import { AiUsageLimitExceededException } from '../../ai/ai-usage-limit-exception';
 import { AI_MODEL_USAGE } from '../../ai/config/ai-model-usage.config';
 
@@ -45,7 +43,6 @@ export class AIService {
     success: boolean;
     message: string;
     size: number;
-    file: string;
   }> {
     this.logger.log('Generating test image...');
 
@@ -73,24 +70,12 @@ export class AIService {
 
     const result = await this.provider.generateImage(prompt);
 
-    // TODO: On success/failure, reconcile with actual usage
-    // For now, the reserved estimate is tracked locally
-
-    const filename = 'flux-test.jpg';
-    const filepath = path.join(process.cwd(), filename);
-
-    this.logger.log(`Saving image to: ${filepath}`);
-
-    fs.writeFileSync(filepath, result.buffer);
-
-    const stats = fs.statSync(filepath);
-    this.logger.log(`Image saved successfully, size: ${stats.size} bytes`);
-
+    // Return the generated image in memory. This is a diagnostic endpoint and
+    // must not write artifacts into the application's working directory.
     return {
       success: true,
       message: 'FLUX.1 Schnell image generated successfully',
-      size: stats.size,
-      file: filename,
+      size: result.buffer.length,
     };
   }
 }

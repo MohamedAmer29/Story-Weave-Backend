@@ -4,10 +4,12 @@ import {
   Get,
   Param,
   Query,
+  Post,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { UserRole } from '../../database/entities/user.entity';
 import { AdminStoriesService } from '../services/admin-stories.service';
 import {
@@ -55,7 +57,8 @@ export class AdminStoriesController {
     return { ...result };
   }
 
-  @Get(':id/retry')
+  @Post(':id/retry')
+  @RateLimit({ ttl: 60, limit: 10 })
   @Audit({
     action: 'GENERATION_RETRY',
     targetType: 'story',

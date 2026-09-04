@@ -167,7 +167,8 @@ export class CloudflareProvider implements AIProvider {
           );
         }
 
-        // Log the response body for debugging without sensitive headers
+        // Log the response body server-side (no sensitive auth headers included)
+        // but return a generic message to the client so no internals leak.
         let safeBody: string;
         try {
           safeBody = JSON.stringify(data);
@@ -177,7 +178,7 @@ export class CloudflareProvider implements AIProvider {
 
         this.logger.error(`Cloudflare API error response: ${safeBody}`);
         throw new InternalServerErrorException(
-          `Cloudflare API error (${status}): ${safeBody}`,
+          `Cloudflare API error (${status})`,
         );
       }
 

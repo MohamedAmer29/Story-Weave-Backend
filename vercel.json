@@ -1,7 +1,7 @@
 {
   "framework": "express",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "runtime": "nodejs20.x"
     }
   }

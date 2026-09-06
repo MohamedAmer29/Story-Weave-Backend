@@ -43,11 +43,12 @@ describe('ScenePromptService', () => {
     );
   });
 
-  it('includes language-specific visual guidance for Arabic stories', () => {
+  it('does not derive visual guidance from the story language', () => {
     const story = makeStory();
     story.language = StoryLanguage.ARABIC;
     const prompt = service.buildImagePrompt(story, makePage());
-    expect(prompt).toContain('Arabic/Middle-Eastern-inspired');
+    expect(prompt).not.toContain('Language guidance');
+    expect(prompt).not.toContain('Arabic/Middle-Eastern-inspired');
   });
 
   it('applies genre guidance when genre service returns a style', () => {

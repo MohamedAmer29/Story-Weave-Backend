@@ -1,25 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Story } from '../../database/entities/story.entity';
 import { StoryEra } from '../../common/enums/story-era.enum';
-import { StoryCivilization } from '../../common/enums/story-civilization.enum';
 import { StoryTheme } from '../../common/enums/story-theme.enum';
-
-const CIVILIZATION_VISUAL: Partial<
-  Record<StoryCivilization, (yearLabel?: string) => string | null>
-> = {
-  [StoryCivilization.ANCIENT_EGYPTIAN]: () =>
-    'Ancient Egyptian visual context, period-appropriate architecture, clothing, materials, symbols, environment, and cultural details.',
-  [StoryCivilization.GREEK]: () =>
-    'Ancient Greek visual context, period-appropriate architecture, clothing, materials, environment, and cultural details.',
-  [StoryCivilization.ROMAN]: () =>
-    'Ancient Roman visual context, period-appropriate architecture, clothing, military/civilian details, materials, environment, and cultural details.',
-  [StoryCivilization.ARABIC]: (yearLabel) =>
-    `Arabic historical/cultural visual context appropriate to ${yearLabel ?? 'the given era and location'}, with culturally appropriate architecture, clothing, materials, environment, and design details.`,
-  [StoryCivilization.EGYPTIAN]: (yearLabel) =>
-    `Egyptian visual context appropriate to ${yearLabel ?? 'the given era and location'}, featuring the architecture, clothing, materials, environment, and cultural details of that period.`,
-  [StoryCivilization.CUSTOM]: () => null,
-  [StoryCivilization.UNSPECIFIED]: () => null,
-};
+import { getCivilization } from '../../common/constants/civilizations.constants';
 
 const THEME_VISUAL: Partial<Record<StoryTheme, string>> = {
   [StoryTheme.FANTASY]:
@@ -116,21 +99,30 @@ export class StoryContextPromptService {
     if (!story.civilization) {
       return null;
     }
-    // Custom civilizations have no fixed visual definition, so we frame the
-    // user-supplied value as cultural context rather than a system instruction.
-    if (story.civilization === StoryCivilization.CUSTOM) {
+    const def = getCivilization(story.civilization);
+    if (!def) {
+      return null;
+    }
+    // Custom civilizations (generic or region-specific) have no fixed visual
+    // definition, so we frame the user-supplied value as cultural context
+    // rather than as a system instruction (prevents prompt injection).
+    if (def.kind === 'custom') {
       const custom = story.customCivilization?.trim();
       if (!custom || custom.length === 0) {
         return null;
       }
       return `Cultural context for ${custom.slice(0, 100)}. Reflect this civilization's architecture, clothing, materials, environment, and cultural details where they do not contradict the story.`;
     }
-    const builder = CIVILIZATION_VISUAL[story.civilization];
-    if (!builder) {
+    // 'unspecified' carries no visual identity of its own.
+    if (def.kind === 'unspecified') {
       return null;
     }
-    const yearLabel = formatYear(story.era, story.year);
-    return builder(yearLabel ?? undefined);
+    const period = formatYear(story.era, story.year);
+    const periodPhrase = period ? ` for the ${period} period` : '';
+    if (def.kind === 'other') {
+      return `Visual setting draws broadly from the ${def.region} cultural sphere${periodPhrase}, incorporating period-appropriate architecture, clothing, materials, environment, and cultural details.`;
+    }
+    return `${def.label} visual context${periodPhrase}, period-appropriate architecture, clothing, materials, environment, and cultural details.`;
   }
 
   /**
@@ -155,28 +147,21 @@ export class StoryContextPromptService {
   }
 
   private civilizationLabel(story: Story): string | null {
-    switch (story.civilization) {
-      case StoryCivilization.ANCIENT_EGYPTIAN:
-        return 'Ancient Egyptian civilization';
-      case StoryCivilization.GREEK:
-        return 'Ancient Greek civilization';
-      case StoryCivilization.ROMAN:
-        return 'Ancient Roman civilization';
-      case StoryCivilization.ARABIC:
-        return 'Arabic civilization';
-      case StoryCivilization.EGYPTIAN:
-        return 'Egyptian civilization';
-      case StoryCivilization.CUSTOM: {
-        const custom = story.customCivilization?.trim();
-        if (custom && custom.length > 0) {
-          return `Custom civilization: ${custom.slice(0, 100)}`;
-        }
-        return 'Custom civilization';
-      }
-      case StoryCivilization.UNSPECIFIED:
-      default:
-        return null;
+    const def = getCivilization(story.civilization);
+    if (!def) {
+      return null;
     }
+    if (def.kind === 'unspecified') {
+      return null;
+    }
+    if (def.kind === 'custom') {
+      const custom = story.customCivilization?.trim();
+      if (custom && custom.length > 0) {
+        return `Custom civilization: ${custom.slice(0, 100)}`;
+      }
+      return null;
+    }
+    return `${def.label} civilization`;
   }
 
   private themeLabel(story: Story): string | null {

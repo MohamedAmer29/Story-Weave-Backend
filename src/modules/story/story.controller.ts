@@ -39,7 +39,13 @@ import {
   PaginatedStoriesResponseDto,
 } from './dto/story-response.dto';
 import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
+import { CivilizationsMetaResponseDto } from './dto/civilizations-meta.dto';
 import { StoryType } from '../../common/enums/story-type.enum';
+import { STORY_CIVILIZATION_VALUES } from '../../common/enums/story-civilization.enum';
+import {
+  CIVILIZATION_REGIONS,
+  getCivilizationsByRegion,
+} from '../../common/constants/civilizations.constants';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
@@ -310,15 +316,7 @@ export class StoryController {
         },
         civilization: {
           type: 'string',
-          enum: [
-            'ARABIC',
-            'EGYPTIAN',
-            'ANCIENT_EGYPTIAN',
-            'GREEK',
-            'ROMAN',
-            'CUSTOM',
-            'UNSPECIFIED',
-          ],
+          enum: STORY_CIVILIZATION_VALUES,
           description:
             'Optional civilization. `EGYPTIAN` and `ANCIENT_EGYPTIAN` are separate.',
         },
@@ -381,6 +379,25 @@ export class StoryController {
         .replace(/_/g, ' ')
         .toLowerCase()
         .replace(/(^|\s)\S/g, (s) => s.toUpperCase()),
+    }));
+    return { data };
+  }
+
+  @Public()
+  @Get('meta/civilizations')
+  @ApiOperation({
+    summary: 'Get supported civilizations grouped by region (public)',
+  })
+  @ApiResponse({ status: 200, type: CivilizationsMetaResponseDto })
+  getCivilizationsMeta(): CivilizationsMetaResponseDto {
+    const data = CIVILIZATION_REGIONS.map((region) => ({
+      id: region,
+      options: getCivilizationsByRegion(region).map((c) => ({
+        value: c.value,
+        label: c.label,
+        region: c.region,
+        kind: c.kind,
+      })),
     }));
     return { data };
   }

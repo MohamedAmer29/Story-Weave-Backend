@@ -83,14 +83,14 @@ describe('StoryContextPromptService', () => {
       const g = service.buildCivilizationGuidance(
         makeStory({ civilization: StoryCivilization.GREEK }),
       );
-      expect(g).toContain('Ancient Greek visual context');
+      expect(g).toContain('Greek visual context');
     });
 
     it('produces Roman guidance', () => {
       const g = service.buildCivilizationGuidance(
         makeStory({ civilization: StoryCivilization.ROMAN }),
       );
-      expect(g).toContain('Ancient Roman visual context');
+      expect(g).toContain('Roman visual context');
     });
 
     it('produces Arabic guidance referencing era', () => {
@@ -101,7 +101,7 @@ describe('StoryContextPromptService', () => {
           year: 700,
         }),
       );
-      expect(g).toContain('Arabic historical/cultural visual context');
+      expect(g).toContain('Arabic visual context');
       expect(g).toContain('700 BCE');
     });
 
@@ -113,7 +113,15 @@ describe('StoryContextPromptService', () => {
         makeStory({ civilization: StoryCivilization.ANCIENT_EGYPTIAN }),
       );
       expect(egyptian).not.toEqual(ancient);
-      expect(egyptian).toContain('appropriate to');
+      expect(egyptian).toContain('Egyptian visual context');
+    });
+
+    it('produces region-based guidance for other-kind civilizations', () => {
+      const g = service.buildCivilizationGuidance(
+        makeStory({ civilization: StoryCivilization.OTHER_AFRICAN }),
+      );
+      expect(g).toContain('Africa');
+      expect(g).toContain('cultural sphere');
     });
 
     it('references custom civilization value as metadata', () => {
@@ -127,10 +135,19 @@ describe('StoryContextPromptService', () => {
       expect(g).toContain('Cultural context');
     });
 
+    it('references region-specific custom civilization value as metadata', () => {
+      const g = service.buildCivilizationGuidance(
+        makeStory({
+          civilization: StoryCivilization.CUSTOM_AFRICAN_CIVILIZATION,
+          customCivilization: 'Dinka chiefdom',
+        }),
+      );
+      expect(g).toContain('Dinka chiefdom');
+      expect(g).toContain('Cultural context');
+    });
+
     it('returns null for unspecified civilization', () => {
-      expect(
-        service.buildCivilizationGuidance(makeStory()),
-      ).toBeNull();
+      expect(service.buildCivilizationGuidance(makeStory())).toBeNull();
     });
   });
 

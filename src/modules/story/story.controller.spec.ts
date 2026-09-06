@@ -210,4 +210,17 @@ describe('StoryController', () => {
       expect(result.data).toContainEqual({ value: 'SCI_FI', label: 'Sci Fi' });
     });
   });
+
+  describe('getCivilizationsMeta', () => {
+    it('returns civilizations grouped by region in canonical order', async () => {
+      const result = await controller.getCivilizationsMeta();
+      const { data } = result;
+      expect(data[0].id).toBe('Unspecified');
+      const africa = data.find((r) => r.id === 'Africa');
+      expect(africa).toBeDefined();
+      expect(africa!.options[0].value).toBe('ANCIENT_EGYPTIAN');
+      const custom = africa!.options.find((o) => o.kind === 'custom');
+      expect(custom).toBeDefined();
+    });
+  });
 });

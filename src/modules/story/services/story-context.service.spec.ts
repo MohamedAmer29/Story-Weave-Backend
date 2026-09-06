@@ -25,9 +25,9 @@ describe('StoryContextService', () => {
     });
 
     it('rejects a year of zero', () => {
-      expect(() =>
-        service.normalize({ era: StoryEra.BCE, year: 0 }),
-      ).toThrow(BadRequestException);
+      expect(() => service.normalize({ era: StoryEra.BCE, year: 0 })).toThrow(
+        BadRequestException,
+      );
     });
 
     it('rejects a negative year', () => {
@@ -71,9 +71,9 @@ describe('StoryContextService', () => {
     });
 
     it('rejects an excessively long location', () => {
-      expect(() =>
-        service.normalize({ location: 'x'.repeat(201) }),
-      ).toThrow(BadRequestException);
+      expect(() => service.normalize({ location: 'x'.repeat(201) })).toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -90,6 +90,33 @@ describe('StoryContextService', () => {
         customCivilization: ' Nubian Civilization ',
       });
       expect(out.customCivilization).toBe('Nubian Civilization');
+    });
+
+    it('rejects region-specific custom civilizations without custom text', () => {
+      expect(() =>
+        service.normalize({
+          civilization: StoryCivilization.CUSTOM_AFRICAN_CIVILIZATION,
+        }),
+      ).toThrow(BadRequestException);
+    });
+
+    it('accepts region-specific custom civilizations with valid custom text', () => {
+      const out = service.normalize({
+        civilization: StoryCivilization.CUSTOM_AFRICAN_CIVILIZATION,
+        customCivilization: ' Dinka chiefdom ',
+      });
+      expect(out.civilization).toBe(
+        StoryCivilization.CUSTOM_AFRICAN_CIVILIZATION,
+      );
+      expect(out.customCivilization).toBe('Dinka chiefdom');
+    });
+
+    it('ignores custom civilization text for non-custom values', () => {
+      const out = service.normalize({
+        civilization: StoryCivilization.OTHER_AFRICAN,
+        customCivilization: 'ignore me',
+      });
+      expect(out.customCivilization).toBeNull();
     });
 
     it('ignores custom civilization when not CUSTOM', () => {
@@ -112,9 +139,9 @@ describe('StoryContextService', () => {
 
   describe('theme', () => {
     it('rejects CUSTOM theme without a custom theme', () => {
-      expect(() =>
-        service.normalize({ theme: StoryTheme.CUSTOM }),
-      ).toThrow(BadRequestException);
+      expect(() => service.normalize({ theme: StoryTheme.CUSTOM })).toThrow(
+        BadRequestException,
+      );
     });
 
     it('accepts CUSTOM theme with a valid custom value', () => {

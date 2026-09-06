@@ -4,18 +4,6 @@ import { StoryPage } from '../../database/entities/story-page.entity';
 import { STORY_TYPE_LABELS } from '../../common/constants/story-type.constants';
 import { GenreVisualStyleService } from './genre-visual-style.service';
 import { StoryContextPromptService } from './story-context-prompt.service';
-import { StoryLanguage } from '../../common/enums/story-language.enum';
-
-const LANGUAGE_THEMES: Record<string, { visualGuidance: string }> = {
-  ARABIC: {
-    visualGuidance:
-      'Arabic/Middle-Eastern-inspired visual atmosphere and culturally appropriate regional details where relevant.',
-  },
-  ENGLISH: {
-    visualGuidance:
-      'Use a visual atmosphere appropriate to the story setting and genre.',
-  },
-};
 
 const DEFAULT_VISUAL_STYLE =
   "Whimsical children's storybook illustration, expressive characters, detailed environment, soft cinematic lighting, colorful, polished digital illustration, warm atmosphere, child-friendly, high quality.";
@@ -52,12 +40,6 @@ export class ScenePromptService {
     const storyTypeLabel = story.storyType
       ? STORY_TYPE_LABELS[story.storyType]
       : null;
-    // Language theme guidance
-    const lang = story.language as any as StoryLanguage | undefined;
-    const langTheme = lang ? LANGUAGE_THEMES[lang] : undefined;
-    if (langTheme) {
-      parts.push(`Language guidance: ${langTheme.visualGuidance}`);
-    }
     parts.push(
       `Generate an illustration for a ${storyTypeLabel ?? 'story'} story.`,
     );
@@ -105,13 +87,6 @@ export class ScenePromptService {
 
   buildCoverPrompt(story: Story): string {
     const parts: string[] = [];
-    // Language theme guidance
-    const lang = story.language as any as StoryLanguage | undefined;
-    const langTheme = lang ? LANGUAGE_THEMES[lang] : undefined;
-    if (langTheme) {
-      parts.push(`Language guidance: ${langTheme.visualGuidance}`);
-    }
-
     const storyTypeLabel = story.storyType
       ? STORY_TYPE_LABELS[story.storyType]
       : 'story';
@@ -258,13 +233,6 @@ export class ScenePromptService {
         lowerLine.includes('illustration for a')
       ) {
         priority = 4;
-      }
-      // Priority 5: Language theme
-      else if (
-        lowerLine.includes('language guidance') ||
-        lowerLine.includes('language theme')
-      ) {
-        priority = 5;
       }
       // Priority 6: Visual style guidance
       else if (

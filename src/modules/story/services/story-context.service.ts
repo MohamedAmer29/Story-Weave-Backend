@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { StoryEra } from '../../../common/enums/story-era.enum';
 import { StoryCivilization } from '../../../common/enums/story-civilization.enum';
 import { StoryTheme } from '../../../common/enums/story-theme.enum';
+import { isCustomCivilization } from '../../../common/constants/civilizations.constants';
 
 /**
  * Internal normalized representation of the Story Context, ready to be stored
@@ -93,11 +94,13 @@ export class StoryContextService {
       );
     }
 
-    // CUSTOM civilization requires the custom text; otherwise it is ignored.
-    if (civilization === StoryCivilization.CUSTOM) {
+    // Any custom civilization (the generic CUSTOM or a region-specific one such
+    // as CUSTOM_AFRICAN_CIVILIZATION) requires the custom text; otherwise any
+    // provided customCivilization text is ignored.
+    if (isCustomCivilization(civilization)) {
       if (!customCivilization) {
         throw new BadRequestException(
-          'customCivilization is required when civilization is CUSTOM',
+          'customCivilization is required when a custom civilization is selected',
         );
       }
     } else {

@@ -121,7 +121,7 @@ export class CreateStoryDto {
 
   @ApiPropertyOptional({
     description:
-      'Custom civilization value, required only when `civilization` is `CUSTOM`. Framed as contextual metadata, never as a system instruction.',
+      'Custom civilization value, required when a custom civilization is selected (the generic `CUSTOM` or a region-specific one such as `CUSTOM_AFRICAN_CIVILIZATION`). Framed as contextual metadata, never as a system instruction.',
     example: 'Nubian Civilization',
     maxLength: 100,
   })

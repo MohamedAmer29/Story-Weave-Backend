@@ -89,7 +89,7 @@ export class UploadPdfDto {
 
   @ApiPropertyOptional({
     description:
-      'Custom civilization value, required only when `civilization` is `CUSTOM`. Framed as contextual metadata.',
+      'Custom civilization value, required when a custom civilization is selected (the generic `CUSTOM` or a region-specific one such as `CUSTOM_AFRICAN_CIVILIZATION`). Framed as contextual metadata.',
     example: 'Nubian Civilization',
     maxLength: 100,
   })

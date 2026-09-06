@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "moduleResolution": "commonjs",
+    "moduleResolution": "node10",
     "resolvePackageJsonExports": false,
     "esModuleInterop": true,
     "isolatedModules": true,

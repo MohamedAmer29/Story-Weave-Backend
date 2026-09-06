@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -15,6 +16,7 @@ import { StoryStatus } from '../../common/enums/story-status.enum';
 import { StoryVisibility } from '../../common/enums/story-visibility.enum';
 import { SourceType } from '../../common/enums/source-type.enum';
 import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
+import { AUDIT_ACTIONS_LIST } from '../audit/audit-actions';
 
 export class AdminUserQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -56,6 +58,7 @@ export class UpdateUserRoleDto {
 
 export class UpdateUserActiveDto {
   @Type(() => Boolean)
+  @IsBoolean()
   isActive: boolean;
 }
 
@@ -163,15 +166,7 @@ export class RetryStoryDto {
   scope: 'page' | 'cover' = 'page';
 }
 
-export const AUDIT_ACTION_VALUES = [
-  'USER_UPDATE_ROLE',
-  'USER_SET_ACTIVE',
-  'USER_DEACTIVATE',
-  'STORY_DELETE',
-  'GENERATION_RETRY',
-  'QUEUE_CLEAN',
-  'AI_USAGE_RESET',
-] as const;
+export const AUDIT_ACTION_VALUES = AUDIT_ACTIONS_LIST;
 
 export class AuditQueryDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
@@ -198,4 +193,49 @@ export class AuditQueryDto {
   @IsOptional()
   @IsIn(AUDIT_ACTION_VALUES)
   action?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by target type (e.g. user, story)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  targetType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Free-text search (action, actor, target id/type)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  search?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by date (inclusive) ISO date' })
+  @IsOptional()
+  @IsString()
+  dateFrom?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by date (inclusive) ISO date' })
+  @IsOptional()
+  @IsString()
+  dateTo?: string;
+
+  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sort?: 'asc' | 'desc';
+
+  @ApiPropertyOptional({
+    description: 'Group/All action filter label (authentication, users, etc.)',
+  })
+  @IsOptional()
+  @IsIn([
+    'authentication',
+    'users',
+    'stories',
+    'sharing',
+    'generation',
+    'system',
+  ])
+  category?: string;
 }

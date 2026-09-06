@@ -23,6 +23,8 @@ import { IllustrationJobData } from './illustration.service';
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { PublicCacheService } from '../common/services/public-cache.service';
 import { PromptValidationService } from './services/prompt-validation.service';
+import { AuditLogService } from '../admin/audit/audit-log.service';
+import { AuditAction } from '../admin/audit/audit-actions';
 import { Redis } from 'ioredis';
 
 const CLOUDFLARE_MODEL_KEY = '@cf/black-forest-labs/flux-1-schnell';
@@ -67,6 +69,7 @@ export class IllustrationProcessor
     private readonly storyProgressService: StoryProgressService,
     private readonly publicCacheService: PublicCacheService,
     private readonly promptValidationService: PromptValidationService,
+    private readonly auditService: AuditLogService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -155,6 +158,18 @@ export class IllustrationProcessor
       this.logger.log(
         `[IllustrationJob] jobId=${jobId} storyId=${storyId} type=COVER userId=${userId} attempt=${job.attemptsMade + 1}/${job.opts.attempts || 3}`,
       );
+
+      void this.auditService.record({
+        adminId: userId ?? 'unknown',
+        action: AuditAction.STORY_GENERATION_STARTED,
+        targetType: 'STORY',
+        targetId: storyId ?? null,
+        description: 'Cover generation started',
+        metadata: {
+          generationType: 'COVER',
+          jobId,
+        },
+      });
 
       const story = await this.storyRepository.findOne({
         where: { id: storyId },
@@ -246,6 +261,20 @@ export class IllustrationProcessor
         );
         // notify page completed for cover? Emit a dedicated notification if needed
         await this.publicCacheService.bust();
+
+        void this.auditService.record({
+          adminId: userId ?? 'unknown',
+          action: AuditAction.STORY_GENERATION_COMPLETED,
+          targetType: 'STORY',
+          targetId: story.id,
+          description: `Cover generation completed for "${story.title}"`,
+          metadata: {
+            generationType: 'COVER',
+            status: 'COMPLETED',
+            aiProvider: 'Cloudflare',
+            model: CLOUDFLARE_MODEL_KEY,
+          },
+        });
       } catch (error: any) {
         this.logger.error(
           `[IllustrationJob] jobId=${jobId} storyId=${storyId} Cover job failed: ${error?.message}`,
@@ -253,6 +282,23 @@ export class IllustrationProcessor
         story.coverImageStatus = IllustrationPageStatus.FAILED;
         story.coverImageError = (error as Error)?.message ?? 'Unknown error';
         await this.storyRepository.save(story).catch(() => undefined);
+
+        const progress = await this.refreshStoryStatus(story);
+        await this.storyProgressService.onChangeStatus(story, progress.result);
+        await this.publicCacheService.bust();
+
+        void this.auditService.record({
+          adminId: userId ?? 'unknown',
+          action: AuditAction.STORY_GENERATION_FAILED,
+          targetType: 'STORY',
+          targetId: story.id,
+          description: 'Cover generation failed',
+          metadata: {
+            generationType: 'COVER',
+            status: 'FAILED',
+            reason: this.safeErrorMessage(error),
+          },
+        });
 
         // Don't retry non-retryable errors
         if (!this.isRetryableError(error)) {
@@ -293,6 +339,20 @@ export class IllustrationProcessor
       await this.markPageFailed(page, 'Story not found');
       return;
     }
+
+    void this.auditService.record({
+      adminId: userId ?? 'unknown',
+      action: AuditAction.STORY_GENERATION_STARTED,
+      targetType: 'STORY_PAGE',
+      targetId: storyPageId,
+      description: 'Story page generation started',
+      metadata: {
+        generationType: 'STORY_PAGE',
+        storyId: story.id,
+        pageNumber: page.pageNumber,
+        jobId,
+      },
+    });
 
     try {
       await this.setPageStatus(page, IllustrationPageStatus.GENERATING);
@@ -406,6 +466,22 @@ export class IllustrationProcessor
       const progress = await this.refreshStoryStatus(story);
       await this.storyProgressService.onChangeStatus(story, progress.result);
       await this.publicCacheService.bust();
+
+      void this.auditService.record({
+        adminId: userId ?? 'unknown',
+        action: AuditAction.STORY_GENERATION_COMPLETED,
+        targetType: 'STORY_PAGE',
+        targetId: page.id,
+        description: `Story page ${page.pageNumber} generation completed`,
+        metadata: {
+          generationType: 'STORY_PAGE',
+          storyId: story.id,
+          pageNumber: page.pageNumber,
+          status: 'COMPLETED',
+          aiProvider: 'Cloudflare',
+          model: CLOUDFLARE_MODEL_KEY,
+        },
+      });
     } catch (error: any) {
       this.logger.error(
         `[IllustrationJob] jobId=${jobId} storyPageId=${storyPageId} Error: ${error?.message}`,
@@ -420,6 +496,21 @@ export class IllustrationProcessor
         const progress = await this.refreshStoryStatus(story);
         await this.storyProgressService.onChangeStatus(story, progress.result);
         await this.publicCacheService.bust();
+
+        void this.auditService.record({
+          adminId: userId ?? 'unknown',
+          action: AuditAction.STORY_GENERATION_FAILED,
+          targetType: 'STORY_PAGE',
+          targetId: page.id,
+          description: `Story page ${page.pageNumber} generation failed`,
+          metadata: {
+            generationType: 'STORY_PAGE',
+            storyId: story.id,
+            pageNumber: page.pageNumber,
+            status: 'FAILED',
+            reason: this.safeErrorMessage(error),
+          },
+        });
       } else {
         // Transient failure: show QUEUED while a retry is scheduled.
         this.logger.log(

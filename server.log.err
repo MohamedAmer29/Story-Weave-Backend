@@ -1,0 +1,57 @@
+(node:19896) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[31m[Nest] 19896  - [39m09/06/2026, 6:03:28 PM [31m  ERROR[39m [38;5;3m[HttpExceptionFilter] [39m[31mGET /api/admin/system/audit - Status: 401 - RequestId: 29a4985e-dab6-4acf-beb1-520a7db6de51 - Message: Unauthorized[39m
+UnauthorizedException: Unauthorized
+    at JwtAuthGuard.handleRequest (D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:60:30)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:44:124
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:83:24
+    at allFailed (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:110:18)
+    at attempt (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:183:28)
+    at JwtStrategy.strategy.fail (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:314:9)
+    at JwtStrategy.authenticate (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport-jwt\lib\strategy.js:96:21)
+    at attempt (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:378:16)
+    at authenticate (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:379:7)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:88:3
+[31m[Nest] 19896  - [39m09/06/2026, 6:09:15 PM [31m  ERROR[39m [38;5;3m[HttpExceptionFilter] [39m[31mGET /api/admin/system/queue - Status: 401 - RequestId: 84610f59-6885-4503-8d39-103fd33d366a - Message: Unauthorized[39m
+UnauthorizedException: Unauthorized
+    at JwtAuthGuard.handleRequest (D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:60:30)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:44:124
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:83:24
+    at allFailed (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:110:18)
+    at attempt (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:183:28)
+    at JwtStrategy.strategy.fail (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:314:9)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport-jwt\lib\strategy.js:106:33
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:190:16
+    at getSecret (D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:97:14)
+    at Object.module.exports [as verify] (D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:101:10)
+[31m[Nest] 19896  - [39m09/06/2026, 6:09:15 PM [31m  ERROR[39m [38;5;3m[HttpExceptionFilter] [39m[31mGET /api/admin/dashboard - Status: 401 - RequestId: 0596fa66-0b76-4506-879d-ea192f4f55da - Message: Unauthorized[39m
+UnauthorizedException: Unauthorized
+    at JwtAuthGuard.handleRequest (D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:60:30)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:44:124
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:83:24
+    at allFailed (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:110:18)
+    at attempt (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:183:28)
+    at JwtStrategy.strategy.fail (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:314:9)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport-jwt\lib\strategy.js:106:33
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:190:16
+    at getSecret (D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:97:14)
+    at Object.module.exports [as verify] (D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:101:10)
+[31m[Nest] 19896  - [39m09/06/2026, 6:09:15 PM [31m  ERROR[39m [38;5;3m[HttpExceptionFilter] [39m[31mGET /api/admin/system/health - Status: 401 - RequestId: 73fb6a00-1eba-43e1-97ad-d93db7b3e49f - Message: Unauthorized[39m
+UnauthorizedException: Unauthorized
+    at JwtAuthGuard.handleRequest (D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:60:30)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:44:124
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\@nestjs\passport\dist\auth.guard.js:83:24
+    at allFailed (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:110:18)
+    at attempt (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:183:28)
+    at JwtStrategy.strategy.fail (D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport\lib\middleware\authenticate.js:314:9)
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\passport-jwt\lib\strategy.js:106:33
+    at D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:190:16
+    at getSecret (D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:97:14)
+    at Object.module.exports [as verify] (D:\Full-Stack projects\AI Generating Images\backend\node_modules\jsonwebtoken\verify.js:101:10)

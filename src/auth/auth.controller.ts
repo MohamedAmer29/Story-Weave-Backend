@@ -16,7 +16,6 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiCookieAuth,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -31,7 +30,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
-import { UuidParamDto, SessionIdParamDto } from '../common/dto/uuid-param.dto';
+import { SessionIdParamDto } from '../common/dto/uuid-param.dto';
 import type { CookieOptions } from 'express';
 
 @ApiTags('auth')
@@ -81,7 +80,8 @@ export class AuthController {
   }
 
   private extractRefreshToken(req: Request): string | undefined {
-    return req.cookies?.refresh_token;
+    const cookies = req.cookies as Record<string, string> | undefined;
+    return cookies?.refresh_token;
   }
 
   @Public()
@@ -169,9 +169,17 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout current session' })
   @ApiResponse({ status: 200, description: 'Logged out' })
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async logout(
+    @CurrentUser('id') userId: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const refreshToken = this.extractRefreshToken(req);
-    await this.authService.logout(refreshToken);
+    await this.authService.logout(refreshToken, {
+      userId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
 
     this.clearRefreshCookie(res);
 
@@ -186,9 +194,13 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'All sessions logged out' })
   async logoutAll(
     @CurrentUser('id') userId: string,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    await this.authService.logoutAll(userId);
+    await this.authService.logoutAll(userId, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
 
     this.clearRefreshCookie(res);
 
@@ -212,8 +224,24 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify email with OTP' })
   @ApiResponse({ status: 200, description: 'Email verified' })
   @ApiResponse({ status: 400, description: 'Invalid or expired OTP' })
-  async verifyEmail(@Body() dto: VerifyOtpDto) {
-    return this.authService.verifyEmail(dto);
+  async verifyEmail(
+    @Body() dto: VerifyOtpDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyEmail(
+      dto,
+      req.ip,
+      req.headers['user-agent'],
+    );
+
+    this.setRefreshCookie(res, result.refreshToken, false);
+
+    return {
+      message: result.message,
+      user: result.user,
+      accessToken: result.accessToken,
+    };
   }
 
   @Public()
@@ -267,8 +295,12 @@ export class AuthController {
   async changePassword(
     @CurrentUser('id') userId: string,
     @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
   ) {
-    return this.authService.changePassword(userId, dto);
+    return this.authService.changePassword(userId, dto, {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
   }
 
   @Get('sessions')
@@ -276,9 +308,24 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List active sessions' })
   @ApiResponse({ status: 200, description: 'List of sessions' })
-  async getSessions(@CurrentUser('id') userId: string, @Req() req: Request) {
-    const currentSessionId = (req as any).user?.sessionId;
+  async getSessions(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string | undefined,
+  ) {
     return this.authService.getSessions(userId, currentSessionId);
+  }
+
+  @Delete('sessions/others')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revoke all other sessions' })
+  @ApiResponse({ status: 200, description: 'Other sessions revoked' })
+  async revokeOtherSessions(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('sessionId') currentSessionId: string | undefined,
+  ) {
+    return this.authService.revokeOtherSessions(userId, currentSessionId);
   }
 
   @Delete('sessions/:sessionId')
@@ -293,19 +340,5 @@ export class AuthController {
     @Param() params: SessionIdParamDto,
   ) {
     return this.authService.revokeSession(userId, params.sessionId);
-  }
-
-  @Delete('sessions/others')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Revoke all other sessions' })
-  @ApiResponse({ status: 200, description: 'Other sessions revoked' })
-  async revokeOtherSessions(
-    @CurrentUser('id') userId: string,
-    @Req() req: Request,
-  ) {
-    const currentSessionId = (req as any).user?.sessionId;
-    return this.authService.revokeOtherSessions(userId, currentSessionId);
   }
 }

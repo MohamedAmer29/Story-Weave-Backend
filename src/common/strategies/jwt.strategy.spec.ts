@@ -15,7 +15,10 @@ describe('JwtStrategy', () => {
         key === 'jwt.secret' ? 'test-secret' : undefined,
       ),
     } as unknown as ConfigService;
-    strategy = new JwtStrategy(configService, userRepository as any);
+    const redisService = {
+      get: jest.fn().mockResolvedValue('jti-123'),
+    };
+    strategy = new JwtStrategy(configService, userRepository as any, redisService as any);
   });
 
   describe('validate', () => {
@@ -31,14 +34,14 @@ describe('JwtStrategy', () => {
     it('throws when user not found', async () => {
       userRepository.findOne.mockResolvedValue(null);
       await expect(
-        strategy.validate({ sub: 'u1', email: 'a@b.c', role: 'USER' }),
+        strategy.validate({ sub: 'u1', email: 'a@b.c', role: 'USER', jti: 'jti-123' } as any),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('throws when account is inactive', async () => {
       userRepository.findOne.mockResolvedValue({ id: 'u1', isActive: false });
       await expect(
-        strategy.validate({ sub: 'u1', email: 'a@b.c', role: 'USER' }),
+        strategy.validate({ sub: 'u1', email: 'a@b.c', role: 'USER', jti: 'jti-123' } as any),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
@@ -56,7 +59,8 @@ describe('JwtStrategy', () => {
         email: 'stale@example.com',
         role: UserRole.USER,
         sessionId: 'sess-123',
-      });
+        jti: 'jti-123',
+      } as any);
 
       // returns the DB-derived role/email, not the token values
       expect(result.role).toBe(UserRole.MANAGER);
@@ -74,9 +78,11 @@ describe('JwtStrategy', () => {
       });
       const result = await strategy.validate({
         sub: 'u1',
+        email: 'a@b.c',
         role: UserRole.USER,
         sessionId: 'sess-abc',
-      });
+        jti: 'jti-123',
+      } as any);
       expect(result.sessionId).toBe('sess-abc');
     });
   });

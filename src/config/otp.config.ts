@@ -7,4 +7,5 @@ export default registerAs('otp', () => ({
     process.env.OTP_RESEND_COOLDOWN_SECONDS || '60',
     10,
   ),
+  maxResends: parseInt(process.env.OTP_MAX_RESENDS || '3', 10),
 }));

@@ -14,6 +14,7 @@ import { RefreshToken } from '../database/entities/refresh-token.entity';
 import { EmailService } from '../common/services/email.service';
 import { OtpService } from '../common/services/otp.service';
 import { RedisService } from '../config/redis.service';
+import { AuditLogService } from '../admin/audit/audit-log.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -98,6 +99,10 @@ describe('AuthService', () => {
         { provide: EmailService, useValue: mockEmailService },
         { provide: OtpService, useValue: mockOtpService },
         { provide: RedisService, useValue: mockRedisService },
+        {
+          provide: AuditLogService,
+          useValue: { record: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

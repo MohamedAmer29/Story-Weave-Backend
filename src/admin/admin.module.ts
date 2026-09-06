@@ -8,7 +8,7 @@ import { StoryPage } from '../database/entities/story-page.entity';
 import { StoryShare } from '../database/entities/story-share.entity';
 import { Notification } from '../notifications/notification.entity';
 import { AuditLog } from './entities/audit-log.entity';
-import { AuditLogService } from './audit/audit-log.service';
+import { AuditLogModule } from './audit/audit-log.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { AdminDashboardService } from './services/admin-dashboard.service';
 import { AdminUsersService } from './services/admin-users.service';
@@ -22,9 +22,11 @@ import { AdminDashboardController } from './controllers/admin-dashboard.controll
 import { AdminUsersController } from './controllers/admin-users.controller';
 import { AdminStoriesController } from './controllers/admin-stories.controller';
 import { AdminSystemController } from './controllers/admin-system.controller';
+import { AuditLogsController } from './controllers/audit-logs.controller';
 
 @Module({
   imports: [
+    AuditLogModule,
     TypeOrmModule.forFeature([
       User,
       Story,
@@ -39,13 +41,13 @@ import { AdminSystemController } from './controllers/admin-system.controller';
     AdminUsersController,
     AdminStoriesController,
     AdminSystemController,
+    AuditLogsController,
   ],
   providers: [
     AdminDashboardService,
     AdminUsersService,
     AdminStoriesService,
     AdminSystemService,
-    AuditLogService,
     AuditInterceptor,
     IllustrationStatusService,
     AiUsageService,
@@ -74,6 +76,6 @@ import { AdminSystemController } from './controllers/admin-system.controller';
       inject: [BULLMQ_CONNECTION],
     },
   ],
-  exports: [AuditLogService, AuditInterceptor],
+  exports: [AuditLogModule, AuditInterceptor],
 })
 export class AdminModule {}

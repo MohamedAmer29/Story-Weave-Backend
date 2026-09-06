@@ -11,9 +11,11 @@ import { EmailService } from '../common/services/email.service';
 import { OtpService } from '../common/services/otp.service';
 import { JwtStrategy } from '../common/strategies/jwt.strategy';
 import { AdminBootstrapService } from './admin-bootstrap.service';
+import { AuditLogModule } from '../admin/audit/audit-log.module';
 
 @Module({
   imports: [
+    AuditLogModule,
     TypeOrmModule.forFeature([User, RefreshToken]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
@@ -21,7 +23,7 @@ import { AdminBootstrapService } from './admin-bootstrap.service';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('jwt.secret'),
         signOptions: {
-          expiresIn: configService.get<string>('jwt.expiresIn', '15m') as any,
+          expiresIn: configService.get<string>('jwt.expiresIn', '15m'),
         },
       }),
       inject: [ConfigService],

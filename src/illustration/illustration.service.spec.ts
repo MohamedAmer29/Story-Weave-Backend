@@ -229,6 +229,31 @@ describe('IllustrationService', () => {
         service.queueStoryIllustrations(ownerId, 'story-1', {}),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('clears a stale generation lock before queueing a new attempt', async () => {
+      const pages = [makePage()];
+      storyRepo.findOne.mockResolvedValue(
+        makeStory({
+          pages,
+          illustrationGenerationAttemptId: 'stale-attempt',
+        }),
+      );
+      pageRepo.save.mockImplementation((p) => Promise.resolve(p));
+      storyRepo.createQueryBuilder.mockReturnValue({
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      });
+      (service as any).illustrationStatusService.computeStatus = jest.fn(() => ({
+        status: StoryIllustrationStatus.FAILED,
+      }));
+
+      await service.queueStoryIllustrations(ownerId, 'story-1', {});
+
+      expect(queue.add).toHaveBeenCalled();
+      expect(storyRepo.createQueryBuilder).toHaveBeenCalled();
+    });
   });
 
   describe('regeneratePage', () => {

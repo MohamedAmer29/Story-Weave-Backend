@@ -145,9 +145,13 @@ describe('AuthController', () => {
       authService.logout.mockResolvedValue(undefined);
 
       const res = mockRes();
-      const result = await controller.logout(mockReq, res);
+      const result = await controller.logout('user-1', mockReq, res);
 
-      expect(authService.logout).toHaveBeenCalled();
+      expect(authService.logout).toHaveBeenCalledWith(undefined, {
+        userId: 'user-1',
+        ip: '127.0.0.1',
+        userAgent: 'TestAgent',
+      });
       expect(res.clearCookie).toHaveBeenCalledWith(
         'refresh_token',
         expect.any(Object),
@@ -161,9 +165,12 @@ describe('AuthController', () => {
       authService.logoutAll.mockResolvedValue(undefined);
 
       const res = mockRes();
-      const result = await controller.logoutAll('user-1', res);
+      const result = await controller.logoutAll('user-1', mockReq, res);
 
-      expect(authService.logoutAll).toHaveBeenCalledWith('user-1');
+      expect(authService.logoutAll).toHaveBeenCalledWith('user-1', {
+        ip: '127.0.0.1',
+        userAgent: 'TestAgent',
+      });
       expect(res.clearCookie).toHaveBeenCalled();
       expect(result.message).toContain('All sessions');
     });
@@ -234,10 +241,14 @@ describe('AuthController', () => {
         message: 'Password changed successfully',
       });
 
-      const result = await controller.changePassword('user-1', {
-        currentPassword: 'OldPass123!',
-        newPassword: 'NewPass123!',
-      });
+      const result = await controller.changePassword(
+        'user-1',
+        {
+          currentPassword: 'OldPass123!',
+          newPassword: 'NewPass123!',
+        },
+        mockReq,
+      );
 
       expect(result.message).toContain('Password changed');
     });
@@ -247,12 +258,20 @@ describe('AuthController', () => {
     it('verifies email', async () => {
       authService.verifyEmail.mockResolvedValue({
         message: 'Email verified',
+        user: { id: 'u1' } as any,
+        accessToken: 'acc-1',
+        refreshToken: 'rf-1',
       });
 
-      const result = await controller.verifyEmail({
-        email: 'test@example.com',
-        otp: '123456',
-      });
+      const res = mockRes();
+      const result = await controller.verifyEmail(
+        {
+          email: 'test@example.com',
+          otp: '123456',
+        },
+        mockReq,
+        res,
+      );
 
       expect(result.message).toContain('Email verified');
     });
@@ -262,7 +281,7 @@ describe('AuthController', () => {
     it('returns sessions', async () => {
       authService.getSessions.mockResolvedValue([]);
 
-      const result = await controller.getSessions('user-1', mockReq);
+      const result = await controller.getSessions('user-1', 'rt-1');
 
       expect(result).toEqual([]);
     });
@@ -286,7 +305,7 @@ describe('AuthController', () => {
         message: 'Other sessions revoked',
       });
 
-      const result = await controller.revokeOtherSessions('user-1', mockReq);
+      const result = await controller.revokeOtherSessions('user-1', 'rt-1');
 
       expect(result.message).toContain('Other sessions');
     });

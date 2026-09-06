@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -13,11 +14,14 @@ import { AdminSystemService } from '../services/admin-system.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { GenerationQueryDto, AuditQueryDto } from '../dto/admin-query.dto';
 import { Audit } from '../audit/audit.decorator';
+import { AuditInterceptor } from '../audit/audit.interceptor';
+import { AUDIT_ACTION_CATEGORIES } from '../audit/audit-actions';
 
 @ApiTags('admin')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN)
 @Controller('admin/system')
+@UseInterceptors(AuditInterceptor)
 export class AdminSystemController {
   constructor(
     private readonly systemService: AdminSystemService,
@@ -71,7 +75,15 @@ export class AdminSystemController {
   @Get('audit')
   @ApiOperation({ summary: 'List audit log entries' })
   async audit(@Query() query: AuditQueryDto) {
-    const data = await this.auditService.list(query);
+    const actions = query.category
+      ? (AUDIT_ACTION_CATEGORIES[
+          query.category as keyof typeof AUDIT_ACTION_CATEGORIES
+        ] as readonly string[])
+      : undefined;
+    const data = await this.auditService.list({
+      ...query,
+      actions: actions ? [...actions] : undefined,
+    });
     return { success: true, ...data };
   }
 }

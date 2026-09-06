@@ -11,7 +11,7 @@ describe('AuditLogService', () => {
     createQueryBuilder: jest.Mock;
   };
 
-  function mockQueryBuilder(result: any) {
+  function mockQueryBuilder(result: [AuditLog[], number]) {
     return {
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
@@ -23,8 +23,8 @@ describe('AuditLogService', () => {
 
   beforeEach(async () => {
     repo = {
-      create: jest.fn((e) => e),
-      save: jest.fn((e) => Promise.resolve(e)),
+      create: jest.fn((e: Partial<AuditLog>) => e),
+      save: jest.fn((e: Partial<AuditLog>) => Promise.resolve(e)),
       createQueryBuilder: jest.fn(),
     };
 
@@ -72,5 +72,32 @@ describe('AuditLogService', () => {
     expect(result.data).toHaveLength(1);
     expect(result.meta.total).toBe(1);
     expect(result.meta.totalPages).toBe(1);
+  });
+
+  it('applies search and targetType filters', async () => {
+    const qb = {
+      andWhere: jest.fn(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    repo.createQueryBuilder.mockReturnValue(qb);
+
+    await service.list({
+      page: 1,
+      limit: 20,
+      targetType: 'story',
+      search: 'delete',
+    });
+
+    expect(qb.andWhere).toHaveBeenCalledWith('audit.targetType = :targetType', {
+      targetType: 'story',
+    });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('audit.action ILIKE'),
+      { s: '%delete%' },
+    );
+    expect(qb.orderBy).toHaveBeenCalledWith('audit.createdAt', 'DESC');
   });
 });

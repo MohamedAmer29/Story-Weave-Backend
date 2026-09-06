@@ -42,6 +42,8 @@ import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { NotificationType } from '../../notifications/notification-type.enum';
+import { AuditLogService } from '../../admin/audit/audit-log.service';
+import { AuditAction } from '../../admin/audit/audit-actions';
 
 @Injectable()
 export class StoryService {
@@ -66,6 +68,7 @@ export class StoryService {
     private readonly cloudinaryService: CloudinaryService,
     private readonly publicCacheService: PublicCacheService,
     private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditLogService,
   ) {}
 
   async create(
@@ -116,7 +119,53 @@ export class StoryService {
 
     await this.publicCacheService.bust();
 
+    await this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_CREATED,
+      targetType: 'STORY',
+      targetId: story.id,
+      description: `Story "${story.title}" created`,
+      metadata: {
+        title: story.title,
+        visibility: story.visibility,
+        storyType: story.storyType,
+      },
+      ...(await this.actorInfo(userId)),
+    });
+
     return this.toResponseDto(story);
+  }
+
+  private async actorInfo(userId: string): Promise<{
+    adminEmail: string | null;
+    actorName: string | null;
+    actorRole: string | null;
+  }> {
+    try {
+      const actor = await this.userRepository.findOne({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      });
+      if (!actor) {
+        return { adminEmail: null, actorName: null, actorRole: null };
+      }
+      const actorName =
+        actor.name || `${actor.firstName} ${actor.lastName}`.trim() || null;
+      return {
+        adminEmail: actor.email,
+        actorName,
+        actorRole: actor.role,
+      };
+    } catch {
+      return { adminEmail: null, actorName: null, actorRole: null };
+    }
   }
 
   async findAll(
@@ -468,6 +517,19 @@ export class StoryService {
 
     await this.publicCacheService.bust();
 
+    void this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_UPDATED,
+      targetType: 'STORY',
+      targetId: story.id,
+      description: `Story "${story.title}" updated`,
+      metadata: {
+        title: story.title,
+        changedFields: Object.keys(updateStoryDto),
+      },
+      ...(await this.actorInfo(userId)),
+    });
+
     return this.toResponseDto(story);
   }
 
@@ -517,6 +579,19 @@ export class StoryService {
     );
 
     this.logger.log(`Story deleted: ${id}`);
+
+    void this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_DELETED,
+      targetType: 'STORY',
+      targetId: story.id,
+      description: `Story "${story.title}" deleted`,
+      metadata: {
+        title: story.title,
+        visibility: story.visibility,
+      },
+      ...(await this.actorInfo(userId)),
+    });
   }
 
   async getPagesForUser(storyId: string, userId: string): Promise<StoryPage[]> {
@@ -756,10 +831,25 @@ export class StoryService {
       userId,
     );
 
+    const previousVisibility = story.visibility;
     story.visibility = visibility;
     await this.storyRepository.save(story);
 
     await this.publicCacheService.bust();
+
+    void this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_VISIBILITY_CHANGED,
+      targetType: 'STORY',
+      targetId: story.id,
+      description: `Story "${story.title}" visibility changed`,
+      metadata: {
+        title: story.title,
+        from: previousVisibility,
+        to: visibility,
+      },
+      ...(await this.actorInfo(userId)),
+    });
 
     return this.toResponseDto(story);
   }
@@ -827,6 +917,22 @@ export class StoryService {
       { storyId, sharedBy: userId },
     );
 
+    void this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_SHARED,
+      targetType: 'STORY',
+      targetId: story.id,
+      description: `Story "${story.title}" shared`,
+      metadata: {
+        title: story.title,
+        sharedWith: targetUserId,
+        sharedWithName: targetUser.name ?? null,
+        sharerName,
+        permission: 'VIEW',
+      },
+      ...(await this.actorInfo(userId)),
+    });
+
     return {
       success: true,
       message: 'Story shared successfully',
@@ -869,6 +975,19 @@ export class StoryService {
       `Your access to "${story.title}" has been removed by the owner.`,
       { storyId },
     );
+
+    void this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_ACCESS_REMOVED,
+      targetType: 'STORY',
+      targetId: story.id,
+      description: `Story "${story.title}" access removed`,
+      metadata: {
+        title: story.title,
+        targetUserId,
+      },
+      ...(await this.actorInfo(userId)),
+    });
   }
 
   async listShares(

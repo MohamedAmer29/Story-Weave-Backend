@@ -43,7 +43,7 @@ export class AdminUsersController {
   }
 
   @Patch(':id/role')
-  @Audit({ action: 'USER_UPDATE_ROLE', targetType: 'user', targetParam: 'id' })
+  @Audit({ action: 'ROLE_CHANGED', targetType: 'user', targetParam: 'id' })
   @ApiOperation({ summary: 'Update a user role' })
   async updateRole(
     @CurrentUser() actor: { id: string; email?: string },
@@ -56,7 +56,14 @@ export class AdminUsersController {
 
   @Patch(':id/active')
   @Audit({
-    action: 'USER_SET_ACTIVE',
+    action: 'USER_ACTIVATED',
+    actionBuilder: (req) => {
+      const body = req.body as { isActive?: boolean };
+      return body?.isActive ? 'USER_ACTIVATED' : 'USER_DEACTIVATED';
+    },
+    metadataBuilder: (req) => ({
+      isActive: Boolean((req.body as { isActive?: boolean })?.isActive),
+    }),
     targetType: 'user',
     targetParam: 'id',
   })

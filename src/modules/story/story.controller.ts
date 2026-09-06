@@ -145,6 +145,41 @@ export class StoryController {
   }
 
   @Public()
+  @Get('types')
+  @ApiOperation({ summary: 'Get supported story types (genres)' })
+  @ApiResponse({ status: 200, description: 'List of story types' })
+  async getTypes() {
+    const types = Object.values(StoryType) as string[];
+    const data = types.map((t) => ({
+      value: t,
+      label: t
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/(^|\s)\S/g, (s) => s.toUpperCase()),
+    }));
+    return { data };
+  }
+
+  @Public()
+  @Get('meta/civilizations')
+  @ApiOperation({
+    summary: 'Get supported civilizations grouped by region (public)',
+  })
+  @ApiResponse({ status: 200, type: CivilizationsMetaResponseDto })
+  getCivilizationsMeta(): CivilizationsMetaResponseDto {
+    const data = CIVILIZATION_REGIONS.map((region) => ({
+      id: region,
+      options: getCivilizationsByRegion(region).map((c) => ({
+        value: c.value,
+        label: c.label,
+        region: c.region,
+        kind: c.kind,
+      })),
+    }));
+    return { data };
+  }
+
+  @Public()
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
@@ -365,40 +400,5 @@ export class StoryController {
     @Body() body: UploadPdfDto,
   ): Promise<StoryResponseDto> {
     return this.storyService.createFromPdf(userId, file, body);
-  }
-
-  @Public()
-  @Get('types')
-  @ApiOperation({ summary: 'Get supported story types (genres)' })
-  @ApiResponse({ status: 200, description: 'List of story types' })
-  async getTypes() {
-    const types = Object.values(StoryType) as string[];
-    const data = types.map((t) => ({
-      value: t,
-      label: t
-        .replace(/_/g, ' ')
-        .toLowerCase()
-        .replace(/(^|\s)\S/g, (s) => s.toUpperCase()),
-    }));
-    return { data };
-  }
-
-  @Public()
-  @Get('meta/civilizations')
-  @ApiOperation({
-    summary: 'Get supported civilizations grouped by region (public)',
-  })
-  @ApiResponse({ status: 200, type: CivilizationsMetaResponseDto })
-  getCivilizationsMeta(): CivilizationsMetaResponseDto {
-    const data = CIVILIZATION_REGIONS.map((region) => ({
-      id: region,
-      options: getCivilizationsByRegion(region).map((c) => ({
-        value: c.value,
-        label: c.label,
-        region: c.region,
-        kind: c.kind,
-      })),
-    }));
-    return { data };
   }
 }

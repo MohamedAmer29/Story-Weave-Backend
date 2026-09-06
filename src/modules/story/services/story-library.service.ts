@@ -211,32 +211,17 @@ export class StoryLibraryService {
 
     const ids = stories.map((s) => s.id);
 
-    const [statsRaw, coversRaw] = await Promise.all([
-      this.storyPageRepository
-        .createQueryBuilder('page')
-        .select('page.storyId', 'storyId')
-        .addSelect('COUNT(*)', 'total')
-        .addSelect(
-          `COUNT(*) FILTER (WHERE page.imageStatus = '${IllustrationPageStatus.COMPLETED}')`,
-          'illustrated',
-        )
-        .where('page.storyId IN (:...ids)', { ids })
-        .groupBy('page.storyId')
-        .getRawMany(),
-      this.storyPageRepository
-        .createQueryBuilder('page')
-        .select('page.storyId', 'storyId')
-        .addSelect('page.imageUrl', 'imageUrl')
-        .distinctOn(['page.storyId'])
-        .where('page.storyId IN (:...ids)', { ids })
-        .andWhere('page.imageStatus = :completed', {
-          completed: IllustrationPageStatus.COMPLETED,
-        })
-        .andWhere('page.imageUrl IS NOT NULL')
-        .orderBy('page.storyId', 'ASC')
-        .addOrderBy('page.pageNumber', 'ASC')
-        .getRawMany(),
-    ]);
+    const statsRaw = await this.storyPageRepository
+      .createQueryBuilder('page')
+      .select('page.storyId', 'storyId')
+      .addSelect('COUNT(*)', 'total')
+      .addSelect(
+        `COUNT(*) FILTER (WHERE page.imageStatus = '${IllustrationPageStatus.COMPLETED}')`,
+        'illustrated',
+      )
+      .where('page.storyId IN (:...ids)', { ids })
+      .groupBy('page.storyId')
+      .getRawMany();
 
     const stats = new Map<string, { total: number; illustrated: number }>();
     for (const row of statsRaw) {
@@ -244,13 +229,6 @@ export class StoryLibraryService {
         total: Number(row.total) || 0,
         illustrated: Number(row.illustrated) || 0,
       });
-    }
-
-    const covers = new Map<string, string>();
-    for (const row of coversRaw) {
-      if (!covers.has(row.storyId)) {
-        covers.set(row.storyId, row.imageUrl);
-      }
     }
 
     return stories.map((story) => {
@@ -262,7 +240,10 @@ export class StoryLibraryService {
         visibility: story.visibility,
         status: story.status,
         sourceType: story.sourceType,
-        coverImageUrl: covers.get(story.id) ?? undefined,
+        coverImageUrl:
+          story.coverImageStatus === IllustrationPageStatus.COMPLETED
+            ? story.coverImageUrl
+            : undefined,
         totalPages: pageStats?.total ?? 0,
         illustratedPages: pageStats?.illustrated ?? 0,
         createdAt: story.createdAt,

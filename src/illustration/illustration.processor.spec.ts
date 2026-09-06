@@ -13,6 +13,7 @@ import { IllustrationStatusService } from './services/illustration-status.servic
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { PublicCacheService } from '../common/services/public-cache.service';
 import { PromptValidationService } from './services/prompt-validation.service';
+import { AuditLogService } from '../admin/audit/audit-log.service';
 
 function makeJob(overrides: Partial<any> = {}): any {
   const job: any = {
@@ -106,6 +107,10 @@ describe('IllustrationProcessor', () => {
           useValue: {
             validateImagePrompt: jest.fn().mockImplementation((p: string) => p),
           },
+        },
+        {
+          provide: AuditLogService,
+          useValue: { record: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

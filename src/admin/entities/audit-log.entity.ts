@@ -11,6 +11,7 @@ import {
 @Index('IDX_audit_action', ['action'])
 @Index('IDX_audit_target_type', ['targetType'])
 @Index('IDX_audit_target_id', ['targetId'])
+@Index('IDX_audit_actor_name', ['actorName'])
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -22,6 +23,12 @@ export class AuditLog {
   @Column({ nullable: true, type: 'varchar' })
   adminEmail: string | null;
 
+  @Column({ nullable: true, type: 'varchar', length: 255 })
+  actorName: string | null;
+
+  @Column({ nullable: true, type: 'varchar', length: 50 })
+  actorRole: string | null;
+
   @Column({ type: 'varchar' })
   action: string;
 
@@ -30,6 +37,9 @@ export class AuditLog {
 
   @Column({ nullable: true, type: 'varchar' })
   targetId: string | null;
+
+  @Column({ nullable: true, type: 'varchar', length: 500 })
+  description: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: object | null;

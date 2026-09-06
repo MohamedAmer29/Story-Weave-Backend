@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  TooManyRequestsException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Inject } from '@nestjs/common';
@@ -24,6 +25,8 @@ import { GenerateIllustrationsDto } from './dto/generate-illustrations.dto';
 import { ScenePromptService } from './services/scene-prompt.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { StoryProgressService } from '../notifications/story-progress.service';
+import { RedisService } from '../config/redis.service';
+import { UserRole } from '../database/entities/user.entity';
 
 export interface IllustrationJobData {
   storyId: string;
@@ -39,6 +42,24 @@ const NON_REQUEUEABLE_STATUSES = [
   IllustrationPageStatus.UPLOADING,
 ];
 
+const USER_DAILY_IMAGE_LIMIT = 4;
+const USER_DAILY_IMAGE_LIMIT_TTL_SECONDS = 60 * 60 * 48;
+const USER_DAILY_IMAGE_LIMIT_LUA = `
+local key = KEYS[1]
+local amount = tonumber(ARGV[1])
+local limit = tonumber(ARGV[2])
+local current = tonumber(redis.call('GET', key) or '0')
+local nextValue = current + amount
+
+if nextValue > limit then
+  return {0, current}
+end
+
+redis.call('INCRBY', key, amount)
+redis.call('EXPIRE', key, tonumber(ARGV[3]))
+return {1, nextValue}
+`;
+
 @Injectable()
 export class IllustrationService {
   private readonly logger = new Logger(IllustrationService.name);
@@ -53,6 +74,7 @@ export class IllustrationService {
     private readonly scenePromptService: ScenePromptService,
     private readonly illustrationStatusService: IllustrationStatusService,
     private readonly storyProgressService: StoryProgressService,
+    private readonly redisService: RedisService,
   ) {}
 
   async queueStoryIllustrations(
@@ -70,7 +92,7 @@ export class IllustrationService {
 
     const story = await this.storyRepository.findOne({
       where: { id: storyId },
-      relations: { pages: true },
+      relations: { pages: true, user: true },
     });
 
     if (!story) {
@@ -82,6 +104,32 @@ export class IllustrationService {
     }
 
     this.validateStoryReady(story);
+
+    // If a previous generation attempt is no longer actively processing,
+    // clear the stale lock so the user can retry after a failure.
+    const currentStatus = this.illustrationStatusService.computeStatus(
+      story.pages || [],
+    );
+    if (currentStatus.status === StoryIllustrationStatus.COMPLETED) {
+      throw new BadRequestException(
+        'Illustration generation is already completed for this story',
+      );
+    }
+    if (
+      story.illustrationGenerationAttemptId &&
+      currentStatus.status !== StoryIllustrationStatus.GENERATING &&
+      currentStatus.status !== StoryIllustrationStatus.QUEUED
+    ) {
+      await this.storyRepository
+        .createQueryBuilder()
+        .update(Story)
+        .set({ illustrationGenerationAttemptId: null })
+        .where('id = :id AND illustrationGenerationAttemptId IS NOT NULL', {
+          id: storyId,
+        })
+        .execute();
+      story.illustrationGenerationAttemptId = null;
+    }
 
     // Attempt to claim a generation attempt id atomically to prevent duplicates
     const attemptId = randomUUID();
@@ -111,6 +159,11 @@ export class IllustrationService {
     const eligiblePages = this.selectPagesForQueueing(
       orderedPages,
       dto?.regenerate === true,
+    );
+    await this.assertDailyImageAllowance(
+      story.user?.role ?? UserRole.USER,
+      story.userId,
+      eligiblePages.length + 1,
     );
 
     let queuedPages = 0;
@@ -248,6 +301,7 @@ export class IllustrationService {
 
     const story = await this.storyRepository.findOne({
       where: { id: storyId },
+      relations: { user: true },
     });
 
     if (!story) {
@@ -259,6 +313,7 @@ export class IllustrationService {
     }
 
     this.validateStoryReady(story);
+    await this.assertDailyImageAllowance(story.user?.role ?? UserRole.USER, story.userId, 1);
 
     const page = await this.storyPageRepository.findOne({
       where: { id: pageId, storyId },
@@ -340,6 +395,7 @@ export class IllustrationService {
 
     const story = await this.storyRepository.findOne({
       where: { id: storyId },
+      relations: { user: true },
     });
 
     if (!story) {
@@ -351,6 +407,7 @@ export class IllustrationService {
     }
 
     this.validateStoryReady(story);
+    await this.assertDailyImageAllowance(story.user?.role ?? UserRole.USER, story.userId, 1);
 
     if (this.isRequeueableBlocked(story.coverImageStatus)) {
       throw new BadRequestException(
@@ -452,6 +509,52 @@ export class IllustrationService {
 
       return true;
     });
+  }
+
+  private getDailyImageLimitKey(userId: string): string {
+    const now = new Date();
+    const utcDate = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    const year = utcDate.getUTCFullYear();
+    const month = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(utcDate.getUTCDate()).padStart(2, '0');
+    return `illustration:daily-limit:${userId}:${year}-${month}-${day}`;
+  }
+
+  private async assertDailyImageAllowance(
+    role: UserRole | string | null | undefined,
+    userId: string,
+    amount: number,
+  ): Promise<void> {
+    if (role && role !== UserRole.USER) {
+      return;
+    }
+
+    const client = this.redisService.getClient();
+    const key = this.getDailyImageLimitKey(userId);
+
+    const result: any = await client.eval(
+      USER_DAILY_IMAGE_LIMIT_LUA,
+      1,
+      key,
+      amount,
+      USER_DAILY_IMAGE_LIMIT,
+      USER_DAILY_IMAGE_LIMIT_TTL_SECONDS,
+    );
+
+    const allowed = Array.isArray(result) ? result[0] === 1 : false;
+    const used = Array.isArray(result) ? Number(result[1] ?? 0) : 0;
+
+    if (!allowed) {
+      throw new TooManyRequestsException(
+        `Daily image limit reached. Users can generate up to ${USER_DAILY_IMAGE_LIMIT} images per day.`,
+      );
+    }
+
+    this.logger.debug(
+      `[IllustrationQuota] userId=${userId} role=${role ?? 'UNKNOWN'} reserved=${amount} used=${used}/${USER_DAILY_IMAGE_LIMIT}`,
+    );
   }
 
   private isRequeueableBlocked(

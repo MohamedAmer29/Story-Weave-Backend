@@ -73,6 +73,10 @@ export class OtpService {
     return !stored;
   }
 
+  private resendCountKey(userId: string, type: string): string {
+    return `otp:resends:${type}:${userId}`;
+  }
+
   async getAttempts(userId: string, type: string): Promise<number> {
     const val = await this.redisService.get(this.attemptsKey(userId, type));
     return val ? parseInt(val, 10) : 0;
@@ -83,6 +87,18 @@ export class OtpService {
     const attempts = await this.redisService.incrby(key, 1);
     await this.redisService.expire(key, this.expiresInMinutes * 60);
     return attempts;
+  }
+
+  async getResendCount(userId: string, type: string): Promise<number> {
+    const val = await this.redisService.get(this.resendCountKey(userId, type));
+    return val ? parseInt(val, 10) : 0;
+  }
+
+  async incrementResendCount(userId: string, type: string): Promise<number> {
+    const key = this.resendCountKey(userId, type);
+    const count = await this.redisService.incrby(key, 1);
+    await this.redisService.expire(key, this.expiresInMinutes * 60);
+    return count;
   }
 
   async isCoolingDown(userId: string, type: string): Promise<boolean> {
@@ -101,5 +117,6 @@ export class OtpService {
   async invalidate(userId: string, type: string): Promise<void> {
     await this.redisService.del(this.key(userId, type));
     await this.redisService.del(this.attemptsKey(userId, type));
+    await this.redisService.del(this.resendCountKey(userId, type));
   }
 }

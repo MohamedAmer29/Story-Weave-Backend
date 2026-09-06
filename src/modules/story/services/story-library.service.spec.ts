@@ -249,7 +249,7 @@ describe('StoryLibraryService', () => {
       });
     });
 
-    it('uses only COMPLETED illustrations for counts and cover', async () => {
+    it('uses only COMPLETED illustrations for counts and does not invent a cover from pages', async () => {
       pageQb.getRawMany.mockResolvedValueOnce([
         { storyId: 's-1', total: '3', illustrated: '2' },
       ]);
@@ -261,7 +261,7 @@ describe('StoryLibraryService', () => {
 
       expect(result[0].totalPages).toBe(3);
       expect(result[0].illustratedPages).toBe(2);
-      expect(result[0].coverImageUrl).toBe('https://cdn/cover.jpg');
+      expect(result[0].coverImageUrl).toBeUndefined();
 
       const coversQb = pageRepo.createQueryBuilder.mock.results[1].value;
       expect(coversQb.andWhere).toHaveBeenCalledWith(
@@ -273,6 +273,34 @@ describe('StoryLibraryService', () => {
       expect(coversQb.andWhere).toHaveBeenCalledWith(
         'page.imageUrl IS NOT NULL',
       );
+    });
+
+    it('prefers the dedicated cover when its generation is COMPLETED', async () => {
+      pageQb.getRawMany.mockResolvedValueOnce([]);
+      pageQb.getRawMany.mockResolvedValueOnce([]);
+
+      const result = await service.attachSummaries([
+        makeStory({
+          coverImageUrl: 'https://cdn/cover.png',
+          coverImageStatus: IllustrationPageStatus.COMPLETED,
+        }),
+      ]);
+
+      expect(result[0].coverImageUrl).toBe('https://cdn/cover.png');
+    });
+
+    it('does not fall back to the page cover when dedicated cover is not COMPLETED', async () => {
+      pageQb.getRawMany.mockResolvedValueOnce([]);
+      pageQb.getRawMany.mockResolvedValueOnce([]);
+
+      const result = await service.attachSummaries([
+        makeStory({
+          coverImageUrl: 'https://cdn/stale.png',
+          coverImageStatus: IllustrationPageStatus.FAILED,
+        }),
+      ]);
+
+      expect(result[0].coverImageUrl).toBeUndefined();
     });
   });
 });

@@ -50,7 +50,7 @@ export class AdminStoriesController {
   }
 
   @Delete(':id')
-  @Audit({ action: 'STORY_DELETE', targetType: 'story', targetParam: 'id' })
+  @Audit({ action: 'STORY_DELETED', targetType: 'story', targetParam: 'id' })
   @ApiOperation({ summary: 'Delete a story (admin)' })
   async remove(@Param('id') id: string) {
     const result = await this.storiesService.delete(id);

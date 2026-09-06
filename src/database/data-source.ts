@@ -13,6 +13,9 @@ import { Notification } from '../notifications/notification.entity';
 import { AuditLog } from '../admin/entities/audit-log.entity';
 import { InitialSchema1720000000000 } from './migrations/1720000000000-initial-schema';
 import { StoryContext1739990000000 } from './migrations/1739990000000-story-context';
+import { StoryCivilizationsExpansion1741000000000 } from './migrations/1741000000000-story-civilizations-expansion';
+import { AddModernGlobalCivilization1741000000001 } from './migrations/1741000000001-add-modern-global-civilization';
+import { AuditLogExpansion1741000000001 } from './migrations/1741000000001-audit-log-expansion';
 
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 
@@ -28,7 +31,8 @@ export default new DataSource({
   // explicit DATABASE_SSL covers host/port-based connections.
   ssl: sslEnabled
     ? {
-        rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
+        rejectUnauthorized:
+          process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false',
       }
     : undefined,
   entities: [
@@ -40,7 +44,13 @@ export default new DataSource({
     Notification,
     AuditLog,
   ],
-  migrations: [InitialSchema1720000000000, StoryContext1739990000000],
+  migrations: [
+    InitialSchema1720000000000,
+    StoryContext1739990000000,
+    StoryCivilizationsExpansion1741000000000,
+    AddModernGlobalCivilization1741000000001,
+    AuditLogExpansion1741000000001,
+  ],
   synchronize: false,
   logging: false,
 });

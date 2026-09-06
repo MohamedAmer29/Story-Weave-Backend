@@ -19,6 +19,8 @@ import { OtpService } from '../common/services/otp.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RedisService } from '../config/redis.service';
+import { AuditLogService } from '../admin/audit/audit-log.service';
+import { AuditAction } from '../admin/audit/audit-actions';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -36,6 +38,7 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly otpService: OtpService,
     private readonly redisService: RedisService,
+    private readonly auditService: AuditLogService,
   ) {}
 
   private get refreshExpiresInDays(): number {
@@ -58,15 +61,21 @@ export class AuthService {
     return createHash('sha256').update(token).digest('hex');
   }
 
-  private signAccessToken(user: User, sessionId?: string): string {
+  private async signAccessToken(
+    user: User,
+    sessionId?: string,
+  ): Promise<string> {
+    const jti = randomBytes(16).toString('hex');
     const payload: Record<string, unknown> = {
       sub: user.id,
       email: user.email,
       role: user.role,
+      jti,
     };
     if (sessionId) {
       payload.sessionId = sessionId;
     }
+    await this.redisService.set(`active_token:${user.id}`, jti, 15 * 60 * 1000);
     return this.jwtService.sign(payload);
   }
 
@@ -141,7 +150,10 @@ export class AuthService {
     const { token: refreshToken, refreshToken: savedRefreshToken } =
       await this.createRefreshToken(savedUser.id, ipAddress, userAgent);
 
-    const accessToken = this.signAccessToken(savedUser, savedRefreshToken.id);
+    const accessToken = await this.signAccessToken(
+      savedUser,
+      savedRefreshToken.id,
+    );
 
     try {
       const otp = await this.otpService.generate(savedUser.id, 'verify');
@@ -155,6 +167,19 @@ export class AuthService {
 
     this.logger.log(`User registered: ${normalizedEmail}`);
 
+    void this.auditService.record({
+      adminId: savedUser.id,
+      adminEmail: normalizedEmail,
+      actorName: savedUser.name,
+      actorRole: savedUser.role,
+      action: AuditAction.USER_CREATED,
+      targetType: 'USER',
+      targetId: savedUser.id,
+      description: `User ${savedUser.name ?? normalizedEmail} registered`,
+      ip: ipAddress,
+      userAgent,
+    });
+
     return {
       user: this.sanitizeUser(savedUser),
       accessToken,
@@ -165,6 +190,52 @@ export class AuthService {
   async login(dto: LoginDto, ipAddress?: string, userAgent?: string) {
     const normalizedEmail = dto.email.toLowerCase().trim();
 
+    let result: {
+      user: User;
+      accessToken: string;
+      refreshToken: string;
+    };
+    try {
+      result = await this.loginInternal(
+        normalizedEmail,
+        dto.password,
+        ipAddress,
+        userAgent,
+        dto.rememberMe,
+      );
+    } catch (error) {
+      void this.auditService.record({
+        adminId: 'unknown',
+        adminEmail: normalizedEmail,
+        actorName: null,
+        actorRole: null,
+        action: AuditAction.LOGIN_FAILED,
+        targetType: 'AUTH',
+        description: `Login failed for ${normalizedEmail}: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+        ip: ipAddress,
+        userAgent,
+      });
+      throw error;
+    }
+
+    this.logger.log(`User logged in: ${normalizedEmail}`);
+
+    return {
+      user: this.sanitizeUser(result.user),
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    };
+  }
+
+  private async loginInternal(
+    normalizedEmail: string,
+    password: string,
+    ipAddress?: string,
+    userAgent?: string,
+    rememberMe = false,
+  ): Promise<{ user: User; accessToken: string; refreshToken: string }> {
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
@@ -175,7 +246,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const passwordValid = await compare(dto.password, user.password);
+    const passwordValid = await compare(password, user.password);
     if (!passwordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
@@ -185,22 +256,24 @@ export class AuthService {
     }
 
     const { token: refreshToken, refreshToken: savedRefreshToken } =
-      await this.createRefreshToken(
-        user.id,
-        ipAddress,
-        userAgent,
-        dto.rememberMe,
-      );
+      await this.createRefreshToken(user.id, ipAddress, userAgent, rememberMe);
 
-    const accessToken = this.signAccessToken(user, savedRefreshToken.id);
+    const accessToken = await this.signAccessToken(user, savedRefreshToken.id);
 
-    this.logger.log(`User logged in: ${normalizedEmail}`);
+    void this.auditService.record({
+      adminId: user.id,
+      adminEmail: user.email,
+      actorName: user.name,
+      actorRole: user.role,
+      action: AuditAction.LOGIN_SUCCESS,
+      targetType: 'AUTH',
+      targetId: user.id,
+      description: `User ${user.name ?? user.email} logged in`,
+      ip: ipAddress,
+      userAgent,
+    });
 
-    return {
-      user: this.sanitizeUser(user),
-      accessToken,
-      refreshToken,
-    };
+    return { user, accessToken, refreshToken };
   }
 
   async refreshTokens(
@@ -239,7 +312,7 @@ export class AuthService {
     const { token: newRefreshToken, refreshToken: savedRefreshToken } =
       await this.createRefreshToken(user.id, ipAddress, userAgent);
 
-    const accessToken = this.signAccessToken(user, savedRefreshToken.id);
+    const accessToken = await this.signAccessToken(user, savedRefreshToken.id);
 
     return {
       accessToken,
@@ -247,7 +320,10 @@ export class AuthService {
     };
   }
 
-  async logout(refreshTokenValue?: string) {
+  async logout(
+    refreshTokenValue?: string,
+    metadata?: { userId?: string; ip?: string; userAgent?: string },
+  ) {
     if (refreshTokenValue) {
       const tokenHash = this.hashToken(refreshTokenValue);
       await this.refreshTokenRepository.update(
@@ -255,14 +331,41 @@ export class AuthService {
         { revokedAt: new Date() },
       );
     }
+
+    void this.auditService.record({
+      adminId: metadata?.userId ?? 'unknown',
+      actorName: null,
+      actorRole: null,
+      action: AuditAction.LOGOUT,
+      targetType: 'AUTH',
+      targetId: metadata?.userId ?? null,
+      description: 'User logged out',
+      ip: metadata?.ip ?? null,
+      userAgent: metadata?.userAgent ?? null,
+    });
   }
 
-  async logoutAll(userId: string) {
+  async logoutAll(
+    userId: string,
+    metadata?: { ip?: string; userAgent?: string },
+  ) {
     await this.refreshTokenRepository.update(
       { userId, revokedAt: IsNull() },
       { revokedAt: new Date() },
     );
     this.logger.log(`All sessions revoked for user: ${userId}`);
+
+    void this.auditService.record({
+      adminId: userId,
+      actorName: null,
+      actorRole: null,
+      action: AuditAction.LOGOUT,
+      targetType: 'AUTH',
+      targetId: userId,
+      description: 'All sessions revoked',
+      ip: metadata?.ip ?? null,
+      userAgent: metadata?.userAgent ?? null,
+    });
   }
 
   async getMe(userId: string) {
@@ -339,7 +442,7 @@ export class AuthService {
 
     const resetToken = this.jwtService.sign(
       { sub: user.id, purpose: 'password-reset' },
-      { expiresIn: this.resetTokenExpiresIn as any },
+      { expiresIn: this.resetTokenExpiresIn },
     );
 
     return { resetToken };
@@ -348,8 +451,9 @@ export class AuthService {
   async resetPassword(dto: { resetToken: string; newPassword: string }) {
     let payload: { sub: string; purpose: string };
     try {
-      const verified = this.jwtService.verify(dto.resetToken);
-      payload = verified;
+      payload = this.jwtService.verify<{ sub: string; purpose: string }>(
+        dto.resetToken,
+      );
     } catch {
       throw new UnauthorizedException('Invalid or expired reset token');
     }
@@ -381,6 +485,7 @@ export class AuthService {
   async changePassword(
     userId: string,
     dto: { currentPassword: string; newPassword: string },
+    metadata?: { ip?: string; userAgent?: string },
   ) {
     const user = await this.userRepository
       .createQueryBuilder('user')
@@ -413,10 +518,27 @@ export class AuthService {
 
     this.logger.log(`Password changed for user: ${user.email}`);
 
+    void this.auditService.record({
+      adminId: userId,
+      adminEmail: user.email,
+      actorName: user.name,
+      actorRole: user.role,
+      action: AuditAction.PASSWORD_CHANGED,
+      targetType: 'USER',
+      targetId: userId,
+      description: `Password changed for user ${user.name ?? user.email}`,
+      ip: metadata?.ip ?? null,
+      userAgent: metadata?.userAgent ?? null,
+    });
+
     return { message: 'Password changed successfully. Please log in again.' };
   }
 
-  async verifyEmail(dto: { email: string; otp: string }) {
+  async verifyEmail(
+    dto: { email: string; otp: string },
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     const normalizedEmail = dto.email.toLowerCase().trim();
     const user = await this.userRepository.findOne({
       where: { email: normalizedEmail },
@@ -426,27 +548,35 @@ export class AuthService {
       throw new UnauthorizedException('Invalid request');
     }
 
-    if (user.emailVerified) {
-      return { message: 'Email already verified' };
+    if (!user.emailVerified) {
+      const attempts = await this.otpService.getAttempts(user.id, 'verify');
+      if (attempts >= this.configService.get<number>('otp.maxAttempts', 5)) {
+        throw new BadRequestException(
+          'Too many attempts. Please request a new code.',
+        );
+      }
+
+      const valid = await this.otpService.verify(user.id, 'verify', dto.otp);
+      if (!valid) {
+        throw new BadRequestException('Invalid or expired code');
+      }
+
+      await this.userRepository.update(user.id, { emailVerified: true });
+      user.emailVerified = true;
+      this.logger.log(`Email verified for user: ${normalizedEmail}`);
     }
 
-    const attempts = await this.otpService.getAttempts(user.id, 'verify');
-    if (attempts >= this.configService.get<number>('otp.maxAttempts', 5)) {
-      throw new BadRequestException(
-        'Too many attempts. Please request a new code.',
-      );
-    }
+    const { token: refreshToken, refreshToken: savedRefreshToken } =
+      await this.createRefreshToken(user.id, ipAddress, userAgent);
 
-    const valid = await this.otpService.verify(user.id, 'verify', dto.otp);
-    if (!valid) {
-      throw new BadRequestException('Invalid or expired code');
-    }
+    const accessToken = await this.signAccessToken(user, savedRefreshToken.id);
 
-    await this.userRepository.update(user.id, { emailVerified: true });
-
-    this.logger.log(`Email verified for user: ${normalizedEmail}`);
-
-    return { message: 'Email verified successfully' };
+    return {
+      message: 'Email verified successfully',
+      user: this.sanitizeUser(user),
+      accessToken,
+      refreshToken,
+    };
   }
 
   async resendVerification(dto: { email: string }) {
@@ -464,12 +594,21 @@ export class AuthService {
       return response;
     }
 
+    const resendCount = await this.otpService.getResendCount(user.id, 'verify');
+    if (resendCount >= this.configService.get<number>('otp.maxResends', 3)) {
+      throw new BadRequestException(
+        'Maximum resend limit reached (3 times). Please wait or try again later.',
+      );
+    }
+
     const isCoolingDown = await this.otpService.isCoolingDown(
       user.id,
       'verify',
     );
     if (isCoolingDown) {
-      return response;
+      throw new BadRequestException(
+        'Please wait 1 minute before requesting another code.',
+      );
     }
 
     try {
@@ -477,6 +616,7 @@ export class AuthService {
       const otp = await this.otpService.generate(user.id, 'verify');
       await this.emailService.sendVerificationEmail(normalizedEmail, otp);
       await this.otpService.setCooldown(user.id, 'verify');
+      await this.otpService.incrementResendCount(user.id, 'verify');
     } catch (error) {
       this.logger.error(
         `Failed to resend verification email to ${normalizedEmail}`,
@@ -524,7 +664,7 @@ export class AuthService {
     return { message: 'Session revoked' };
   }
 
-  async revokeOtherSessions(userId: string, currentSessionId: string) {
+  async revokeOtherSessions(userId: string, currentSessionId?: string) {
     const query = this.refreshTokenRepository
       .createQueryBuilder()
       .update(RefreshToken)

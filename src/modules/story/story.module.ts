@@ -14,9 +14,11 @@ import { StoryContextService } from './services/story-context.service';
 import { StoryLibraryService } from './services/story-library.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { NotificationsModule } from '../../notifications/notifications.module';
+import { AuditLogModule } from '../../admin/audit/audit-log.module';
 
 @Module({
   imports: [
+    AuditLogModule,
     TypeOrmModule.forFeature([
       Story,
       StoryPage,

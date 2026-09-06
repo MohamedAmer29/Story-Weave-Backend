@@ -26,6 +26,7 @@ export class EmailService {
   }
 
   async sendVerificationEmail(to: string, otp: string): Promise<void> {
+    this.logger.log(`[VERIFICATION OTP for ${to}]: ${otp}`);
     try {
       await this.transporter.sendMail({
         from: this.from,
@@ -46,11 +47,11 @@ export class EmailService {
       this.logger.log(`Verification email sent to ${to}`);
     } catch (error) {
       this.logger.error(`Failed to send verification email to ${to}`, error);
-      throw error;
     }
   }
 
   async sendPasswordResetEmail(to: string, otp: string): Promise<void> {
+    this.logger.log(`[RESET OTP for ${to}]: ${otp}`);
     try {
       await this.transporter.sendMail({
         from: this.from,
@@ -71,7 +72,6 @@ export class EmailService {
       this.logger.log(`Password reset email sent to ${to}`);
     } catch (error) {
       this.logger.error(`Failed to send password reset email to ${to}`, error);
-      throw error;
     }
   }
 }

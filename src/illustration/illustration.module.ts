@@ -10,6 +10,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { BullMQModule } from '../bullmq/bullmq.module';
 import { BULLMQ_CONNECTION } from '../bullmq/bullmq.constants';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
+import { AuditLogModule } from '../admin/audit/audit-log.module';
 import { ILLUSTRATION_QUEUE } from './illustration.constants';
 import { IllustrationController } from './illustration.controller';
 import { IllustrationService } from './illustration.service';
@@ -29,6 +30,7 @@ import { PromptValidationService } from './services/prompt-validation.service';
     NotificationsModule,
     BullMQModule,
     CloudinaryModule,
+    AuditLogModule,
   ],
   controllers: [IllustrationController],
   providers: [
@@ -71,6 +73,6 @@ import { PromptValidationService } from './services/prompt-validation.service';
       inject: [BULLMQ_CONNECTION],
     },
   ],
-  exports: [IllustrationService],
+  exports: [IllustrationService, IllustrationProcessor],
 })
 export class IllustrationModule {}

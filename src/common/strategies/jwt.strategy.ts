@@ -5,12 +5,14 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
+import { RedisService } from '../../config/redis.service';
 
 interface JwtPayload {
   sub: string;
   email: string;
   role: string;
   sessionId?: string;
+  jti?: string;
 }
 
 @Injectable()
@@ -19,6 +21,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly configService: ConfigService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly redisService: RedisService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -29,7 +32,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload) {
     if (!payload || !payload.sub) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException({
+        errorCode: 'ACCESS_TOKEN_INVALIDATED',
+        message: 'Invalid access token payload',
+      });
+    }
+
+    if (payload.jti) {
+      const activeJti = await this.redisService.get(
+        `active_token:${payload.sub}`,
+      );
+      if (activeJti && payload.jti !== activeJti) {
+        throw new UnauthorizedException({
+          errorCode: 'ACCESS_TOKEN_INVALIDATED',
+          message: 'Access token is an old version and has been invalidated',
+        });
+      }
     }
 
     const user = await this.userRepository.findOne({
@@ -40,9 +58,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Account is unavailable');
     }
 
-    // Re-read the role/email from the DB rather than trusting the (potentially
-    // stale) values embedded in the token. This ensures a demoted admin or a
-    // changed email takes effect immediately instead of waiting for token expiry.
     return {
       id: user.id,
       email: user.email,

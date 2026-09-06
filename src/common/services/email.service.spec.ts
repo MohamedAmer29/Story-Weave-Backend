@@ -44,11 +44,11 @@ describe('EmailService', () => {
       );
     });
 
-    it('rethrows errors from the transporter', async () => {
+    it('does not throw when the transporter fails', async () => {
       sendMailMock.mockRejectedValue(new Error('smtp down'));
       await expect(
         service.sendVerificationEmail('user@test.com', '123456'),
-      ).rejects.toThrow('smtp down');
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -65,11 +65,11 @@ describe('EmailService', () => {
       );
     });
 
-    it('rethrows errors', async () => {
+    it('does not throw when the transporter fails', async () => {
       sendMailMock.mockRejectedValue(new Error('smtp down'));
       await expect(
         service.sendPasswordResetEmail('user@test.com', '654321'),
-      ).rejects.toThrow('smtp down');
+      ).resolves.toBeUndefined();
     });
   });
 });

@@ -28,6 +28,7 @@ import { IllustrationStatusService } from '../../illustration/services/illustrat
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { AuditLogService } from '../../admin/audit/audit-log.service';
 
 describe('StoryService', () => {
   let service: StoryService;
@@ -190,6 +191,10 @@ describe('StoryService', () => {
         {
           provide: NotificationsService,
           useValue: notificationsService,
+        },
+        {
+          provide: AuditLogService,
+          useValue: { record: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();

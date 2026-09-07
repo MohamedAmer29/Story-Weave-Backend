@@ -67,8 +67,8 @@ describe('Admin authorization', () => {
       );
     });
 
-    it('rejects MANAGER users', () => {
-      expect(() => guard.canActivate(ctx(UserRole.MANAGER))).toThrow(
+    it('rejects AUTHOR users', () => {
+      expect(() => guard.canActivate(ctx(UserRole.AUTHOR))).toThrow(
         ForbiddenException,
       );
     });

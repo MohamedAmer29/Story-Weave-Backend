@@ -857,31 +857,34 @@ export class StoryService {
   async shareStory(
     userId: string,
     storyId: string,
-    targetUserId: string,
+    targetUserEmail: string,
   ): Promise<{ success: boolean; message: string }> {
-    this.logger.log(`Sharing story: ${storyId} with user: ${targetUserId}`);
+    const normalizedEmail = targetUserEmail.toLowerCase().trim();
+    this.logger.log(
+      `Sharing story: ${storyId} with user email: ${normalizedEmail}`,
+    );
 
     const story = await this.storyAccessService.requireOwnership(
       storyId,
       userId,
     );
 
-    // Verify target user exists
+    // Resolve the email to an internal user ID before creating the share.
     const targetUser = await this.userRepository.findOne({
-      where: { id: targetUserId },
+      where: { email: normalizedEmail },
     });
     if (!targetUser) {
       throw new NotFoundException('Target user not found');
     }
 
     // Prevent sharing with yourself
-    if (targetUserId === userId) {
+    if (targetUser.id === userId) {
       throw new BadRequestException('Cannot share story with yourself');
     }
 
     // Check for existing share
     const existingShare = await this.storyShareRepository.findOne({
-      where: { storyId, userId: targetUserId },
+      where: { storyId, userId: targetUser.id },
     });
     if (existingShare) {
       throw new BadRequestException('Story already shared with this user');
@@ -890,7 +893,7 @@ export class StoryService {
     // Create share
     const share = this.storyShareRepository.create({
       storyId,
-      userId: targetUserId,
+      userId: targetUser.id,
     });
     await this.storyShareRepository.save(share);
 
@@ -910,7 +913,7 @@ export class StoryService {
       'Someone';
 
     await this.notificationsService.create(
-      targetUserId,
+      targetUser.id,
       NotificationType.STORY_SHARED,
       'Story shared with you',
       `"${story.title}" has been shared with you by ${sharerName}.`,
@@ -925,7 +928,7 @@ export class StoryService {
       description: `Story "${story.title}" shared`,
       metadata: {
         title: story.title,
-        sharedWith: targetUserId,
+        sharedWith: targetUser.id,
         sharedWithName: targetUser.name ?? null,
         sharerName,
         permission: 'VIEW',

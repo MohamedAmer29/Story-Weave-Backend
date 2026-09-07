@@ -16,6 +16,8 @@ import { StoryContext1739990000000 } from './migrations/1739990000000-story-cont
 import { StoryCivilizationsExpansion1741000000000 } from './migrations/1741000000000-story-civilizations-expansion';
 import { AddModernGlobalCivilization1741000000001 } from './migrations/1741000000001-add-modern-global-civilization';
 import { AuditLogExpansion1741000000001 } from './migrations/1741000000001-audit-log-expansion';
+import { AddAuthorRole1750000000000 } from './migrations/1750000000000-add-author-role';
+import { ReplaceManagerWithAuthorRole1750000000001 } from './migrations/1750000000001-replace-manager-with-author-role';
 
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 
@@ -50,6 +52,8 @@ export default new DataSource({
     StoryCivilizationsExpansion1741000000000,
     AddModernGlobalCivilization1741000000001,
     AuditLogExpansion1741000000001,
+    AddAuthorRole1750000000000,
+    ReplaceManagerWithAuthorRole1750000000001,
   ],
   synchronize: false,
   logging: false,

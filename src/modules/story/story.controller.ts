@@ -256,7 +256,7 @@ export class StoryController {
     @Param() params: UuidParamDto,
     @Body() body: ShareStoryDto,
   ) {
-    return this.storyService.shareStory(userId, params.id, body.userId);
+    return this.storyService.shareStory(userId, params.id, body.email);
   }
 
   @Delete(':id/share/:targetUserId')

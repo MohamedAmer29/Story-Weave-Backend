@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Story } from '../../../database/entities/story.entity';
 import { StoryPage } from '../../../database/entities/story-page.entity';
 import { StoryShare } from '../../../database/entities/story-share.entity';
+import { User } from '../../../database/entities/user.entity';
 import { StoryVisibility } from '../../../common/enums/story-visibility.enum';
 import { StoryStatus } from '../../../common/enums/story-status.enum';
 import { SourceType } from '../../../common/enums/source-type.enum';
@@ -20,6 +21,7 @@ describe('StoryLibraryService', () => {
     createQueryBuilder: jest.Mock;
   };
   let cache: { get: jest.Mock; set: jest.Mock };
+  let userRepo: { find: jest.Mock };
 
   let qb: any;
   let pageQb: any;
@@ -74,6 +76,7 @@ describe('StoryLibraryService', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
     };
+    userRepo = { find: jest.fn().mockResolvedValue([]) };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -81,6 +84,7 @@ describe('StoryLibraryService', () => {
         { provide: getRepositoryToken(Story), useValue: storyRepo },
         { provide: getRepositoryToken(StoryPage), useValue: pageRepo },
         { provide: getRepositoryToken(StoryShare), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: PublicCacheService, useValue: cache },
       ],
     }).compile();

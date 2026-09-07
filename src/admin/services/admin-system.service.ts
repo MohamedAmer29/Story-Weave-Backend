@@ -5,6 +5,8 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { StoryPage } from '../../database/entities/story-page.entity';
 import { Story } from '../../database/entities/story.entity';
+import { RefreshToken } from '../../database/entities/refresh-token.entity';
+import { User } from '../../database/entities/user.entity';
 import { AiUsageService } from '../../ai/ai-usage.service';
 import {
   ILLUSTRATION_QUEUE,
@@ -29,9 +31,39 @@ export class AdminSystemService {
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
     private readonly storyPageRepository: Repository<StoryPage>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly usageService: AiUsageService,
     private readonly illustrationStatusService: IllustrationStatusService,
   ) {}
+
+  async revokeOtherUserSessions(
+    adminUserId: string,
+    currentSessionId?: string,
+  ) {
+    const query = this.refreshTokenRepository
+      .createQueryBuilder()
+      .update(RefreshToken)
+      .set({ revokedAt: new Date() })
+      .where('revokedAt IS NULL');
+
+    if (currentSessionId) {
+      query.andWhere('id != :currentSessionId', { currentSessionId });
+    }
+
+    await query.execute();
+
+    await this.userRepository
+      .createQueryBuilder()
+      .update(User)
+      .set({ tokenVersion: () => '"tokenVersion" + 1' })
+      .where('id != :adminUserId', { adminUserId })
+      .execute();
+
+    return { message: 'Other user sessions revoked' };
+  }
 
   async getQueueStats() {
     const [waiting, active, delayed, failed, completed] = await Promise.all([

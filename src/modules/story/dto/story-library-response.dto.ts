@@ -26,6 +26,12 @@ export class StoryLibraryItemDto {
   @ApiPropertyOptional({ enum: StoryType, description: 'Story type (genre)' })
   storyType?: StoryType | null;
 
+  @ApiPropertyOptional({
+    description: 'Public author identity for the story card',
+    type: Object,
+  })
+  author?: { id: string; name: string };
+
   @ApiPropertyOptional({ description: 'First successfully illustrated page' })
   coverImageUrl?: string;
 

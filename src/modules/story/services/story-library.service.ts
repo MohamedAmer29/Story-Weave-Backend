@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Story } from '../../../database/entities/story.entity';
 import { StoryPage } from '../../../database/entities/story-page.entity';
 import { StoryShare } from '../../../database/entities/story-share.entity';
@@ -14,6 +14,7 @@ import {
 } from '../dto/story-library-response.dto';
 import { StorySort } from '../dto/story-list-query.dto';
 import { PublicCacheService } from '../../../common/services/public-cache.service';
+import { User } from '../../../database/entities/user.entity';
 
 export interface StoryListFilters {
   page: number;
@@ -49,6 +50,8 @@ export class StoryLibraryService {
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
     private readonly storyPageRepository: Repository<StoryPage>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly publicCacheService: PublicCacheService,
   ) {}
 
@@ -210,6 +213,18 @@ export class StoryLibraryService {
     }
 
     const ids = stories.map((s) => s.id);
+    const userIds = [...new Set(stories.map((story) => story.userId))];
+
+    const authors = await this.userRepository.find({
+      where: { id: In(userIds) },
+      select: { id: true, name: true, firstName: true, lastName: true },
+    });
+    const authorMap = new Map(
+      authors.map((author) => [
+        author.id,
+        author.name || `${author.firstName} ${author.lastName}`.trim(),
+      ]),
+    );
 
     const statsRaw = await this.storyPageRepository
       .createQueryBuilder('page')
@@ -240,6 +255,10 @@ export class StoryLibraryService {
         visibility: story.visibility,
         status: story.status,
         sourceType: story.sourceType,
+        author: {
+          id: story.userId,
+          name: authorMap.get(story.userId) || 'Unknown author',
+        },
         coverImageUrl:
           story.coverImageStatus === IllustrationPageStatus.COMPLETED
             ? story.coverImageUrl

@@ -13,6 +13,7 @@ interface JwtPayload {
   role: string;
   sessionId?: string;
   jti?: string;
+  tokenVersion?: number;
 }
 
 @Injectable()
@@ -56,6 +57,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Account is unavailable');
+    }
+
+    if (
+      payload.tokenVersion !== undefined &&
+      payload.tokenVersion !== user.tokenVersion
+    ) {
+      throw new UnauthorizedException({
+        errorCode: 'ACCESS_TOKEN_INVALIDATED',
+        message: 'Session has been revoked',
+      });
     }
 
     return {

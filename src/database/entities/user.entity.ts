@@ -12,8 +12,8 @@ import { RefreshToken } from './refresh-token.entity';
 
 export enum UserRole {
   USER = 'USER',
+  AUTHOR = 'AUTHOR',
   ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
 }
 
 @Entity('users')

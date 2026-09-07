@@ -126,7 +126,7 @@ export class AdminDashboardService {
         active: activeUsers,
         inactive: totalUsers - activeUsers,
         admins: countByRole(UserRole.ADMIN),
-        managers: countByRole(UserRole.MANAGER),
+        authors: countByRole(UserRole.AUTHOR),
         consumers: countByRole(UserRole.USER),
       },
       stories: {

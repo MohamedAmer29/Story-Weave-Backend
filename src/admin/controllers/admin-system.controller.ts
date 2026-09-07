@@ -5,10 +5,12 @@ import {
   HttpCode,
   HttpStatus,
   Query,
+  Delete,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../database/entities/user.entity';
 import { AdminSystemService } from '../services/admin-system.service';
 import { AuditLogService } from '../audit/audit-log.service';
@@ -47,6 +49,19 @@ export class AdminSystemController {
   async health() {
     const data = await this.systemService.getHealth();
     return { success: true, data };
+  }
+
+  @Delete('sessions/others')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revoke sessions for all other users' })
+  async revokeOtherUserSessions(
+    @CurrentUser('id') adminUserId: string,
+    @CurrentUser('sessionId') currentSessionId: string | undefined,
+  ) {
+    return this.systemService.revokeOtherUserSessions(
+      adminUserId,
+      currentSessionId,
+    );
   }
 
   @Get('ai-usage')

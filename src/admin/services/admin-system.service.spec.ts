@@ -2,6 +2,8 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
+import { RefreshToken } from '../../database/entities/refresh-token.entity';
+import { User } from '../../database/entities/user.entity';
 import { AiUsageService } from '../../ai/ai-usage.service';
 import { AdminSystemService } from './admin-system.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
@@ -56,6 +58,8 @@ describe('AdminSystemService', () => {
         { provide: BULLMQ_CONNECTION, useValue: connection },
         { provide: getRepositoryToken(Story), useValue: storyRepo },
         { provide: getRepositoryToken(StoryPage), useValue: pageRepo },
+        { provide: getRepositoryToken(RefreshToken), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: {} },
         { provide: AiUsageService, useValue: usageService },
         { provide: IllustrationStatusService, useValue: statusService },
       ],

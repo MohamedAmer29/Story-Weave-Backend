@@ -1,11 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { IsEmail } from 'class-validator';
 
 export class ShareStoryDto {
   @ApiProperty({
-    description: 'UUID of the user to share the story with',
-    format: 'uuid',
+    description: 'Email address of the user to share the story with',
+    example: 'reader@example.com',
   })
-  @IsUUID('4', { message: 'Invalid user identifier' })
-  userId: string;
+  @IsEmail({}, { message: 'Invalid recipient email' })
+  email: string;
 }

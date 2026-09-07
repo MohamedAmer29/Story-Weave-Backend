@@ -163,13 +163,13 @@ describe('StoryController', () => {
         'u1',
         { id: 's1' },
         {
-          userId: 'target-1',
+          email: 'reader@example.com',
         },
       );
       expect(storyService.shareStory).toHaveBeenCalledWith(
         'u1',
         's1',
-        'target-1',
+        'reader@example.com',
       );
     });
 

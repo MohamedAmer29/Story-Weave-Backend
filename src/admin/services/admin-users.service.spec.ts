@@ -122,9 +122,9 @@ describe('AdminUsersService', () => {
       const result = await service.updateRole(
         { id: 'admin-1' },
         'user-1',
-        UserRole.MANAGER,
+        UserRole.AUTHOR,
       );
-      expect(result.role).toBe(UserRole.MANAGER);
+      expect(result.role).toBe(UserRole.AUTHOR);
       expect(userRepo.save).toHaveBeenCalled();
     });
 

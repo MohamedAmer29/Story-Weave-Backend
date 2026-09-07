@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { User } from '../database/entities/user.entity';
+import { RefreshToken } from '../database/entities/refresh-token.entity';
 import { Story } from '../database/entities/story.entity';
 import { StoryPage } from '../database/entities/story-page.entity';
 import { StoryShare } from '../database/entities/story-share.entity';
@@ -29,6 +30,7 @@ import { AuditLogsController } from './controllers/audit-logs.controller';
     AuditLogModule,
     TypeOrmModule.forFeature([
       User,
+      RefreshToken,
       Story,
       StoryPage,
       StoryShare,

@@ -51,9 +51,9 @@ describe('RolesGuard', () => {
   it('allows when user role is in the required roles', () => {
     reflector.getAllAndOverride.mockReturnValue([
       UserRole.ADMIN,
-      UserRole.MANAGER,
+      UserRole.AUTHOR,
     ]);
-    expect(guard.canActivate(makeContext({ role: UserRole.MANAGER }))).toBe(
+    expect(guard.canActivate(makeContext({ role: UserRole.AUTHOR }))).toBe(
       true,
     );
   });

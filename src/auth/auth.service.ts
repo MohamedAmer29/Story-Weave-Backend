@@ -70,6 +70,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
       jti,
     };
     if (sessionId) {
@@ -140,7 +141,7 @@ export class AuthService {
       firstName: dto.firstName.trim(),
       lastName: dto.lastName.trim(),
       name: `${dto.firstName.trim()} ${dto.lastName.trim()}`,
-      role: UserRole.USER,
+      role: dto.role ?? UserRole.USER,
       isActive: true,
       emailVerified: false,
     });

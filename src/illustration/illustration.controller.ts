@@ -21,6 +21,10 @@ import { IllustrationService } from './illustration.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { GenerateIllustrationsDto } from './dto/generate-illustrations.dto';
 import {
+  RegenerateCoverDto,
+  RegeneratePageDto,
+} from './dto/visual-context-overrides.dto';
+import {
   UuidParamDto,
   StoryIdParamDto,
   StoryPageIdParamDto,
@@ -69,11 +73,13 @@ export class IllustrationController {
   async regeneratePage(
     @CurrentUser('id') userId: string,
     @Param() params: StoryPageIdParamDto,
+    @Body() body: RegeneratePageDto,
   ) {
     return this.illustrationService.regeneratePage(
       userId,
       params.storyId,
       params.pageId,
+      body,
     );
   }
 
@@ -88,8 +94,13 @@ export class IllustrationController {
   async regenerateCover(
     @CurrentUser('id') userId: string,
     @Param() params: StoryIdParamDto,
+    @Body() body: RegenerateCoverDto,
   ) {
-    return this.illustrationService.regenerateCover(userId, params.storyId);
+    return this.illustrationService.regenerateCover(
+      userId,
+      params.storyId,
+      body,
+    );
   }
 
   @Get(':storyId/illustrations/status')

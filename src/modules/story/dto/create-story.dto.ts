@@ -15,6 +15,7 @@ import { StoryType } from '../../../common/enums/story-type.enum';
 import { StoryEra } from '../../../common/enums/story-era.enum';
 import { StoryCivilization } from '../../../common/enums/story-civilization.enum';
 import { StoryTheme } from '../../../common/enums/story-theme.enum';
+import { StoryLanguage } from '../../../common/enums/story-language.enum';
 
 export class CreateStoryDto {
   @ApiProperty({ description: 'Story title', maxLength: 200 })
@@ -59,11 +60,14 @@ export class CreateStoryDto {
   @IsOptional()
   visibility?: StoryVisibility;
 
-  @ApiPropertyOptional({ description: 'Story language', maxLength: 10 })
-  @IsString()
+  @ApiPropertyOptional({
+    description: 'Story language',
+    enum: StoryLanguage,
+    example: StoryLanguage.ENGLISH,
+  })
+  @IsEnum(StoryLanguage)
   @IsOptional()
-  @MaxLength(10)
-  language?: string;
+  language?: StoryLanguage;
 
   @ApiPropertyOptional({
     description: 'Visual style for generated illustrations',

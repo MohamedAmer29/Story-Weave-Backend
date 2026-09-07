@@ -4,7 +4,8 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  TooManyRequestsException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Inject } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { Queue } from 'bullmq';
 import { Story } from '../database/entities/story.entity';
 import { StoryPage } from '../database/entities/story-page.entity';
 import { StoryStatus } from '../common/enums/story-status.enum';
+import { StoryLanguage } from '../common/enums/story-language.enum';
 import {
   ILLUSTRATION_QUEUE,
   ILLUSTRATION_JOB_PREFIX,
@@ -27,6 +29,8 @@ import { IllustrationStatusService } from './services/illustration-status.servic
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { RedisService } from '../config/redis.service';
 import { UserRole } from '../database/entities/user.entity';
+import { VisualContextOverrides } from './services/scene-prompt.service';
+import { StoryTranslationService } from './services/story-translation.service';
 
 export interface IllustrationJobData {
   storyId: string;
@@ -75,6 +79,7 @@ export class IllustrationService {
     private readonly illustrationStatusService: IllustrationStatusService,
     private readonly storyProgressService: StoryProgressService,
     private readonly redisService: RedisService,
+    private readonly storyTranslationService: StoryTranslationService,
   ) {}
 
   async queueStoryIllustrations(
@@ -166,12 +171,27 @@ export class IllustrationService {
       eligiblePages.length + 1,
     );
 
+    let visualStory: Story;
+    let visualPages: StoryPage[];
+    try {
+      visualStory = await this.toVisualStory(story);
+      visualPages = await this.toVisualPages(story, orderedPages);
+    } catch (error: any) {
+      await this.releaseGenerationAttempt(storyId, attemptId);
+      this.logger.error(
+        `Failed to translate story ${storyId} for visual generation: ${error?.message ?? 'Unknown error'}`,
+      );
+      throw new BadRequestException(
+        'Could not translate the story for illustration generation. Please try again.',
+      );
+    }
+
     let queuedPages = 0;
 
     // Queue cover job first (separate from story pages)
     try {
       // build cover prompt
-      const coverPrompt = this.scenePromptService.buildCoverPrompt(story);
+      const coverPrompt = this.scenePromptService.buildCoverPrompt(visualStory);
       story.coverImagePrompt = coverPrompt;
       story.coverImageStatus = IllustrationPageStatus.QUEUED;
       await this.storyRepository.save(story);
@@ -208,10 +228,11 @@ export class IllustrationService {
       const previousStatus = page.imageStatus ?? IllustrationPageStatus.PENDING;
 
       try {
+        const visualPage = visualPages.find((candidate) => candidate.id === page.id) ?? page;
         const prompt = this.scenePromptService.buildImagePrompt(
-          story,
-          page,
-          orderedPages,
+          visualStory,
+          visualPage,
+          visualPages,
         );
         // Set status + prompt together to persist in a single UPDATE.
         page.imageStatus = IllustrationPageStatus.QUEUED;
@@ -294,6 +315,7 @@ export class IllustrationService {
     userId: string,
     storyId: string,
     pageId: string,
+    overrides?: VisualContextOverrides,
   ): Promise<{ success: boolean; message: string; pageId: string }> {
     this.logger.log(
       `Regenerating illustration for page: ${pageId} in story: ${storyId}`,
@@ -336,10 +358,14 @@ export class IllustrationService {
         where: { storyId },
         order: { pageNumber: 'ASC' },
       });
+      const visualStory = await this.toVisualStory(story);
+      const visualPages = await this.toVisualPages(story, allPages);
+      const visualPage = visualPages.find((candidate) => candidate.id === page.id) ?? page;
       const prompt = this.scenePromptService.buildImagePrompt(
-        story,
-        page,
-        allPages,
+        visualStory,
+        visualPage,
+        visualPages,
+        overrides,
       );
       page.imagePrompt = prompt;
       page.imageStatus = IllustrationPageStatus.QUEUED;
@@ -390,6 +416,7 @@ export class IllustrationService {
   async regenerateCover(
     userId: string,
     storyId: string,
+    overrides?: VisualContextOverrides,
   ): Promise<{ success: boolean; message: string; storyId: string }> {
     this.logger.log(`Regenerating cover for story: ${storyId}`);
 
@@ -418,7 +445,11 @@ export class IllustrationService {
     const previousStatus = story.coverImageStatus;
 
     try {
-      const coverPrompt = this.scenePromptService.buildCoverPrompt(story);
+      const visualStory = await this.toVisualStory(story);
+      const coverPrompt = this.scenePromptService.buildCoverPrompt(
+        visualStory,
+        overrides,
+      );
       story.coverImagePrompt = coverPrompt;
       story.coverImageStatus = IllustrationPageStatus.QUEUED;
       story.coverImageError = null;
@@ -511,6 +542,70 @@ export class IllustrationService {
     });
   }
 
+  private async toVisualStory(story: Story): Promise<Story> {
+    const visualStory = Object.assign(new Story(), story);
+    visualStory.originalText = await this.storyTranslationService.translateForVisual(
+      story.originalText ?? '',
+      story.language,
+      `story:${story.id}`,
+    );
+    return visualStory;
+  }
+
+  private async toVisualPages(
+    story: Story,
+    pages: StoryPage[],
+  ): Promise<StoryPage[]> {
+    return Promise.all(
+      pages.map(async (page) => {
+        if (story.language !== StoryLanguage.ARABIC) {
+          return Object.assign(new StoryPage(), page);
+        }
+
+        const visualScene = [
+          page.sceneDescription
+            ? `Scene description: ${page.sceneDescription}`
+            : '',
+          `Story content: ${page.text ?? ''}`,
+          page.characterDescriptions
+            ? `Character descriptions: ${page.characterDescriptions}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+        const translatedScene =
+          await this.storyTranslationService.translateForVisual(
+            visualScene,
+            story.language,
+            `page:${page.id}:visual-scene`,
+          );
+
+        return Object.assign(new StoryPage(), page, {
+          text: translatedScene,
+          sceneDescription: null,
+          characterDescriptions: null,
+        });
+      }),
+    );
+  }
+
+  private async releaseGenerationAttempt(
+    storyId: string,
+    attemptId: string,
+  ): Promise<void> {
+    await this.storyRepository
+      .createQueryBuilder()
+      .update(Story)
+      .set({ illustrationGenerationAttemptId: null })
+      .where('id = :id AND illustrationGenerationAttemptId = :attemptId', {
+        id: storyId,
+        attemptId,
+      })
+      .execute()
+      .catch(() => undefined);
+  }
+
   private getDailyImageLimitKey(userId: string): string {
     const now = new Date();
     const utcDate = new Date(
@@ -547,8 +642,9 @@ export class IllustrationService {
     const used = Array.isArray(result) ? Number(result[1] ?? 0) : 0;
 
     if (!allowed) {
-      throw new TooManyRequestsException(
+      throw new HttpException(
         `Daily image limit reached. Users can generate up to ${USER_DAILY_IMAGE_LIMIT} images per day.`,
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 

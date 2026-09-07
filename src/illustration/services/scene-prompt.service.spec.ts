@@ -88,7 +88,7 @@ describe('ScenePromptService', () => {
     story.description = 'A tale of friendship and courage.';
     const prompt = service.buildCoverPrompt(story);
     expect(prompt).toContain('book cover');
-    expect(prompt).toContain('The Magical Forest');
+    expect(prompt).toContain('Story title: The Magical Forest');
     expect(prompt).toContain('A tale of friendship and courage.');
   });
 
@@ -96,7 +96,7 @@ describe('ScenePromptService', () => {
     const story = makeStory();
     story.originalText = 'Once upon a time a young hero set out on a quest.';
     const prompt = service.buildCoverPrompt(story);
-    expect(prompt).toContain('Story summary');
+    expect(prompt).toContain('Story title: The Magical Forest');
     expect(prompt).toContain('Once upon a time');
   });
 
@@ -126,7 +126,7 @@ describe('ScenePromptService', () => {
   it('builds a prompt from story and page details', () => {
     const prompt = service.buildImagePrompt(makeStory(), makePage());
 
-    expect(prompt).toContain('The Magical Forest');
+      expect(prompt).toContain('Story title: The Magical Forest');
     expect(prompt).toContain('An enchanted forest at sunset');
     expect(prompt).toContain('Ahmed: 10-year-old boy');
     expect(prompt).toContain('Location: Enchanted Forest');

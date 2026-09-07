@@ -4,9 +4,11 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import { Story } from '../database/entities/story.entity';
 import { StoryPage } from '../database/entities/story-page.entity';
+import { UserRole } from '../database/entities/user.entity';
 import { StoryStatus } from '../common/enums/story-status.enum';
 import { IllustrationPageStatus } from './enums/illustration-page-status.enum';
 import { StoryIllustrationStatus } from './enums/story-illustration-status.enum';
@@ -18,6 +20,8 @@ import { IllustrationService } from './illustration.service';
 import { ScenePromptService } from './services/scene-prompt.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { StoryProgressService } from '../notifications/story-progress.service';
+import { RedisService } from '../config/redis.service';
+import { StoryTranslationService } from './services/story-translation.service';
 
 describe('IllustrationService', () => {
   let service: IllustrationService;
@@ -32,6 +36,9 @@ describe('IllustrationService', () => {
   };
   let queue: {
     add: jest.Mock;
+  };
+  let redisService: {
+    getClient: jest.Mock;
   };
 
   const ownerId = 'user-1';
@@ -75,6 +82,11 @@ describe('IllustrationService', () => {
     };
     pageRepo = { findOne: jest.fn(), save: jest.fn(), find: jest.fn() };
     queue = { add: jest.fn().mockResolvedValue({ id: 'job' }) };
+    redisService = {
+      getClient: jest.fn().mockReturnValue({
+        eval: jest.fn().mockResolvedValue([1, 1]),
+      }),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -112,6 +124,18 @@ describe('IllustrationService', () => {
             notifyPageCompleted: jest.fn(),
             onChangeStatus: jest.fn(),
             emitProgress: jest.fn(),
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: redisService,
+        },
+        {
+          provide: StoryTranslationService,
+          useValue: {
+            translateForVisual: jest.fn((text: string) =>
+              Promise.resolve(text),
+            ),
           },
         },
       ],
@@ -221,13 +245,32 @@ describe('IllustrationService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
+    it('blocks USER roles after the daily 4 image limit is exhausted', async () => {
+      const pages = [makePage(), makePage({ id: 'page-2', pageNumber: 2 })];
+      storyRepo.findOne.mockResolvedValue(
+        makeStory({
+          pages,
+          user: { role: UserRole.USER } as any,
+        }),
+      );
+      pageRepo.save.mockImplementation((p) => Promise.resolve(p));
+      redisService.getClient.mockReturnValue({
+        eval: jest.fn().mockResolvedValue([0, 4]),
+      });
+
+      await expect(
+        service.queueStoryIllustrations(ownerId, 'story-1', {}),
+      ).rejects.toBeInstanceOf(HttpException);
+      expect(queue.add).not.toHaveBeenCalled();
+    });
+
     it('rejects stories that are not READY', async () => {
       storyRepo.findOne.mockResolvedValue(
         makeStory({ status: StoryStatus.DRAFT }),
       );
       await expect(
         service.queueStoryIllustrations(ownerId, 'story-1', {}),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toBeInstanceOf(HttpException);
     });
 
     it('clears a stale generation lock before queueing a new attempt', async () => {
@@ -280,6 +323,34 @@ describe('IllustrationService', () => {
       );
     });
 
+    it('passes overrides into the centralized prompt builder', async () => {
+      const page = makePage({
+        imageStatus: IllustrationPageStatus.COMPLETED,
+        imageUrl: 'http://old',
+      });
+      storyRepo.findOne.mockResolvedValue(makeStory());
+      pageRepo.findOne.mockResolvedValue(page);
+      pageRepo.find.mockResolvedValue([page]);
+      pageRepo.save.mockImplementation((p) => Promise.resolve(p));
+
+      await service.regeneratePage(ownerId, 'story-1', 'page-1', {
+        civilization: 'ANCIENT_EGYPTIAN' as any,
+        theme: 'HORROR' as any,
+      });
+
+      expect(
+        (service as any).scenePromptService.buildImagePrompt,
+      ).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          civilization: 'ANCIENT_EGYPTIAN',
+          theme: 'HORROR',
+        }),
+      );
+    });
+
     it('blocks regeneration of a page already generating', async () => {
       const page = makePage({ imageStatus: IllustrationPageStatus.GENERATING });
       storyRepo.findOne.mockResolvedValue(makeStory());
@@ -287,7 +358,7 @@ describe('IllustrationService', () => {
 
       await expect(
         service.regeneratePage(ownerId, 'story-1', 'page-1'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toBeInstanceOf(HttpException);
     });
 
     it('rejects non-owners', async () => {
@@ -295,6 +366,24 @@ describe('IllustrationService', () => {
       await expect(
         service.regeneratePage(otherId, 'story-1', 'page-1'),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('blocks regeneration when the daily user limit is exhausted', async () => {
+      const page = makePage({
+        imageStatus: IllustrationPageStatus.COMPLETED,
+        imageUrl: 'http://old',
+      });
+      storyRepo.findOne.mockResolvedValue(
+        makeStory({ user: { role: UserRole.USER } as any }),
+      );
+      pageRepo.findOne.mockResolvedValue(page);
+      redisService.getClient.mockReturnValue({
+        eval: jest.fn().mockResolvedValue([0, 4]),
+      });
+
+      await expect(
+        service.regeneratePage(ownerId, 'story-1', 'page-1'),
+      ).rejects.toBeInstanceOf(HttpException);
     });
 
     it('rejects a page that does not belong to the story', async () => {

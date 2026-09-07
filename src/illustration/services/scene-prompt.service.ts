@@ -2,8 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Story } from '../../database/entities/story.entity';
 import { StoryPage } from '../../database/entities/story-page.entity';
 import { STORY_TYPE_LABELS } from '../../common/constants/story-type.constants';
+import { StoryTheme } from '../../common/enums/story-theme.enum';
+import { StoryEra } from '../../common/enums/story-era.enum';
+import { StoryCivilization } from '../../common/enums/story-civilization.enum';
 import { GenreVisualStyleService } from './genre-visual-style.service';
 import { StoryContextPromptService } from './story-context-prompt.service';
+import { StoryType } from '../../common/enums/story-type.enum';
 
 const DEFAULT_VISUAL_STYLE =
   "Whimsical children's storybook illustration, expressive characters, detailed environment, soft cinematic lighting, colorful, polished digital illustration, warm atmosphere, child-friendly, high quality.";
@@ -21,6 +25,27 @@ interface PromptSection {
   essential: boolean;
 }
 
+interface SceneAnalysis {
+  mainSubject?: string;
+  actions: string[];
+  environment: string[];
+  objects: string[];
+  visualPhenomena: string[];
+  lighting?: string;
+  atmosphere?: string;
+  spatialRelationships: string[];
+  importantDetails: string[];
+}
+
+export interface VisualContextOverrides {
+  location?: string;
+  era?: StoryEra;
+  year?: number;
+  civilization?: StoryCivilization;
+  theme?: StoryTheme;
+  genre?: StoryType;
+}
+
 @Injectable()
 export class ScenePromptService {
   private readonly logger = new Logger(ScenePromptService.name);
@@ -34,131 +59,202 @@ export class ScenePromptService {
     story: Story,
     page: StoryPage,
     allPages?: StoryPage[],
+    overrides?: VisualContextOverrides,
+    visualContent?: string,
   ): string {
-    const parts: string[] = [];
-
-    const storyTypeLabel = story.storyType
-      ? STORY_TYPE_LABELS[story.storyType]
-      : null;
-    parts.push(
-      `Generate an illustration for a ${storyTypeLabel ?? 'story'} story.`,
+    const analysis = this.analyzeScene(page, visualContent);
+    const sections = this.buildImagePromptSections(
+      story,
+      page,
+      allPages,
+      analysis,
+      overrides,
+      visualContent,
     );
-
-    const subject = this.buildSubject(story, page);
-    if (subject) {
-      parts.push(`Story section:\n${subject}`);
-    }
-
-    // Historical & visual context are optional additions layered on top of the
-    // authoritative story content. They must never override the narrative.
-    this.appendStoryContext(parts, story);
-
-    // Genre controls visual treatment; story content stays authoritative.
-    const genreGuidance = this.genreVisualStyleService.getVisualGuidance(
-      story.storyType,
+    const prompt = sections.join('\n\n').trim();
+    this.logger.debug(
+      `Generated image prompt for page ${page.pageNumber} scene=${analysis.mainSubject ?? 'unknown'} length=${prompt.length}`,
     );
-    if (genreGuidance) {
-      parts.push(
-        `The visual style should clearly reflect the ${storyTypeLabel} genre:\n${genreGuidance}.\nUse a coherent illustrated-${storyTypeLabel?.toLowerCase()} aesthetic.`,
-      );
-    }
+    return this.finalizePrompt(prompt);
+  }
 
-    if (story.visualStyle && story.visualStyle.trim().length > 0) {
-      parts.push(`Additional style direction: ${story.visualStyle.trim()}.`);
-    } else if (!genreGuidance) {
-      parts.push(`Visual style: ${DEFAULT_VISUAL_STYLE}`);
-    }
+  buildCoverPrompt(
+    story: Story,
+    overrides?: VisualContextOverrides,
+    visualContent?: string,
+  ): string {
+    const storyTypeLabel = this.resolveGenre(story, overrides);
+    const sections = [
+      `Cover concept: Create a cinematic book cover for a ${storyTypeLabel} story.`,
+      this.buildCoverSubject(story, visualContent),
+      this.buildCoverContext(story, overrides),
+      this.buildCoverGenre(story, overrides),
+      this.buildCoverQuality(story),
+      'Do not include text, typography, logos, or watermarks.',
+    ].filter((value): value is string => Boolean(value && value.trim().length > 0));
 
+    const prompt = sections.join('\n\n').trim();
+    this.logger.debug(`Generated cover prompt length=${prompt.length}`);
+    return this.finalizePrompt(prompt);
+  }
+
+  private buildImagePromptSections(
+    story: Story,
+    page: StoryPage,
+    allPages: StoryPage[] | undefined,
+    analysis: SceneAnalysis,
+    overrides?: VisualContextOverrides,
+    visualContent?: string,
+  ): string[] {
+    const storyTypeLabel = this.resolveGenre(story, overrides);
+    const sections: string[] = [];
+    sections.push(`Exact scene:\n${this.buildSceneText(story, page, analysis, visualContent)}`);
+    sections.push(`Main subject:\n${analysis.mainSubject ?? 'The most important subject in the scene.'}`);
+    sections.push(`Action:\n${analysis.actions.join(' ') || 'Depict the story event exactly as described.'}`);
+    sections.push(`Environment:\n${analysis.environment.join(' ') || 'Use the environment described in the story.'}`);
+    if (analysis.objects.length > 0) sections.push(`Objects:\n${analysis.objects.join(' ')}`);
+    if (analysis.visualPhenomena.length > 0) sections.push(`Visual phenomena:\n${analysis.visualPhenomena.join(' ')}`);
+    if (analysis.lighting) sections.push(`Lighting:\n${analysis.lighting}`);
+    if (analysis.atmosphere) sections.push(`Atmosphere:\n${analysis.atmosphere}`);
+    if (analysis.spatialRelationships.length > 0) sections.push(`Spatial relationships:\n${analysis.spatialRelationships.join(' ')}`);
+    if (analysis.importantDetails.length > 0) sections.push(`Important details:\n${analysis.importantDetails.join(' ')}`);
+    sections.push(
+      'The events, characters, environment, objects, actions and mood must come exactly from the story text.',
+    );
+    sections.push(this.buildStoryContext(story, overrides));
+    sections.push(this.buildGenreSection(storyTypeLabel, story, overrides));
+    sections.push(this.buildThemeSection(story, overrides));
     const continuity = this.buildContinuity(page, allPages);
-    if (continuity) {
-      parts.push(`Scene continuity:\n${continuity}`);
-    }
-
-    parts.push(
-      'Maintain character appearance and important visual details from previous sections when available.',
-      'The genre only guides the visual treatment. The events, characters, environment, objects, actions and mood must come exactly from the story text. Do not introduce major events or characters that are not present in the story.',
-      `Do not include ${TEXT_SUPPRESSION} inside the image.`,
-    );
-
-    const prompt = parts.join('\n\n').trim();
-    this.logger.debug(`Generated image prompt for page ${page.pageNumber}`);
-    return this.finalizePrompt(prompt);
+    if (continuity) sections.push(`Continuity:\n${continuity}`);
+    sections.push(this.buildQualitySection(story));
+    sections.push(`Do not include ${TEXT_SUPPRESSION} inside the image.`);
+    return sections.filter((value): value is string => Boolean(value && value.trim().length > 0));
   }
 
-  buildCoverPrompt(story: Story): string {
-    const parts: string[] = [];
-    const storyTypeLabel = story.storyType
-      ? STORY_TYPE_LABELS[story.storyType]
-      : 'story';
+  private buildSceneText(
+    story: Story,
+    page: StoryPage,
+    analysis: SceneAnalysis,
+    visualContent?: string,
+  ): string {
+    return [
+      story.title ? `Story title: ${story.title}` : '',
+      page.sceneDescription?.trim() || '',
+      (visualContent ?? page.text).trim(),
+      page.characterDescriptions ? `Characters: ${page.characterDescriptions.trim().replace(/[.\s]+$/g, '')}` : '',
+      page.location ? `Location: ${page.location.trim()}` : '',
+      analysis.mainSubject ? `Primary focus: ${analysis.mainSubject}` : '',
+    ].filter(Boolean).join(' ');
+  }
 
-    parts.push(
-      `Create a cinematic book cover illustration for a ${storyTypeLabel} story.`,
+  private analyzeScene(page: StoryPage, visualContent?: string): SceneAnalysis {
+    const text = `${page.sceneDescription ?? ''} ${visualContent ?? page.text ?? ''}`.trim();
+    const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+    const firstSentence = sentences[0] ?? text;
+    const characters = page.characterDescriptions?.trim();
+    const objects = this.extractKeywords(text, ['key', 'sword', 'book', 'door', 'ship', 'window', 'bone', 'spire', 'viewport', 'machine', 'temple', 'crown', 'horse', 'car', 'train']);
+    return {
+      mainSubject: characters || firstSentence.slice(0, 220),
+      actions: this.extractSentences(text, ['stands', 'looks', 'runs', 'holds', 'raises', 'falls', 'rises', 'opens', 'clutches', 'watches', 'leans', 'speaks', 'screams']),
+      environment: [page.location?.trim()].filter(Boolean) as string[],
+      objects,
+      visualPhenomena: this.extractSentences(text, ['light', 'shadow', 'mist', 'fog', 'water', 'fire', 'storm', 'brine', 'glow']),
+      lighting: this.extractPhrase(text, ['light', 'lighting', 'glow', 'dark', 'dim', 'bright', 'sunset', 'moonlight']),
+      atmosphere: this.extractPhrase(text, ['eerie', 'tense', 'calm', 'warm', 'ominous', 'melancholic', 'dreamlike', 'chaotic']),
+      spatialRelationships: this.extractSentences(text, ['beside', 'under', 'above', 'behind', 'in front of', 'through', 'across', 'toward']),
+      importantDetails: [page.sceneDescription?.trim(), page.characterDescriptions?.trim()].filter(Boolean) as string[],
+    };
+  }
+
+  private buildStoryContext(
+    story: Story,
+    overrides?: VisualContextOverrides,
+  ): string {
+    const resolved = this.resolveStory(story, overrides);
+    const lines: string[] = [];
+    const context = this.storyContextPromptService.buildContext(
+      resolved,
     );
+    const civilization = this.storyContextPromptService.buildCivilizationGuidance(
+      resolved,
+    );
+    const theme = this.storyContextPromptService.buildThemeGuidance(
+      resolved,
+    );
+    if (context) lines.push(context);
+    if (civilization) lines.push(`Civilization visual guidance: ${civilization}`);
+    if (theme) lines.push(`Theme visual guidance: ${theme}`);
+    return lines.join('\n');
+  }
 
-    if (story.title && story.title !== 'Untitled Story') {
-      parts.push(`Title: ${story.title}`);
-    }
-
-    if (story.description) {
-      parts.push(`Description: ${story.description}`);
-    } else if (story.originalText) {
-      const snippet = story.originalText
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 800);
-      parts.push(`Story summary: ${snippet}...`);
-    }
-
-    this.appendStoryContext(parts, story);
-
+  private buildGenreSection(
+    storyTypeLabel: string,
+    story: Story,
+    overrides?: VisualContextOverrides,
+  ): string {
     const genreGuidance = this.genreVisualStyleService.getVisualGuidance(
-      story.storyType,
+      overrides?.genre ?? story.storyType,
     );
-    if (genreGuidance) {
-      parts.push(`Visual style guidance: ${genreGuidance}`);
-    }
-
-    if (story.visualStyle) {
-      parts.push(`Additional style direction: ${story.visualStyle}`);
-    } else {
-      parts.push(
-        `Visual style: cinematic, high-detail, professional book cover.`,
-      );
-    }
-
-    parts.push(
-      'Do not include text or typography in the image. Focus on a strong focal point, dramatic lighting, and a clear visual hierarchy. No logos or watermarks.',
-    );
-
-    const prompt = parts.join('\n\n').trim();
-    this.logger.debug('Generated cover prompt');
-    return this.finalizePrompt(prompt);
+    if (!genreGuidance) return `Visual treatment: ${DEFAULT_VISUAL_STYLE}`;
+    return `Genre treatment for ${storyTypeLabel}:\n${genreGuidance}`;
   }
 
-  /**
-   * Appends the optional Story Context (historical/visual guidance) as a
-   * clearly-separated, droppable block. It is framed as context and never as a
-   * system-level instruction.
-   */
-  private appendStoryContext(parts: string[], story: Story): void {
-    const context = this.storyContextPromptService.buildContext(story);
-    const civilization =
-      this.storyContextPromptService.buildCivilizationGuidance(story);
-    const theme = this.storyContextPromptService.buildThemeGuidance(story);
-    const block: string[] = [];
-    if (context) {
-      block.push(context);
-    }
-    if (civilization) {
-      block.push(`Civilization visual guidance: ${civilization}`);
-    }
-    if (theme) {
-      block.push(`Theme visual guidance: ${theme}`);
-    }
+  private buildThemeSection(story: Story, overrides?: VisualContextOverrides): string {
+    const effective = this.resolveStory(story, overrides);
+    if (!effective.theme || effective.theme === StoryTheme.UNSPECIFIED) return '';
+    const guidance = this.storyContextPromptService.buildThemeGuidance(effective);
+    return guidance ? `Theme treatment:\n${guidance}` : '';
+  }
 
-    if (block.length > 0) {
-      parts.push(block.join('\n'));
+  private buildQualitySection(story: Story): string {
+    if (story.visualStyle && story.visualStyle.trim().length > 0) {
+      return `Quality and style:\n${story.visualStyle.trim()}`;
     }
+    return 'Quality and composition: highly detailed, professional cinematic illustration, physically coherent objects, realistic materials, atmospheric depth, accurate anatomy where applicable, sharp primary subject, coherent lighting, detailed environment, polished visual quality.';
+  }
+
+  private buildCoverSubject(story: Story, visualContent?: string): string {
+    const snippet =
+      story.description?.trim() ||
+      visualContent?.replace(/\s+/g, ' ').trim().slice(0, 900) ||
+      story.originalText?.replace(/\s+/g, ' ').trim().slice(0, 900) ||
+      story.title;
+    return `Story title: ${story.title}. Main cover concept should represent the story's central visual idea: ${snippet}`;
+  }
+
+  private buildCoverContext(story: Story, overrides?: VisualContextOverrides): string {
+    return this.buildStoryContext(story, overrides);
+  }
+
+  private buildCoverGenre(story: Story, overrides?: VisualContextOverrides): string {
+    const storyTypeLabel = this.resolveGenre(story, overrides);
+    return this.buildGenreSection(storyTypeLabel, story, overrides);
+  }
+
+  private buildCoverQuality(story: Story): string {
+    return this.buildQualitySection(story);
+  }
+
+  private extractSentences(text: string, keywords: string[]): string[] {
+    return text
+      .split(/(?<=[.!?])\s+/)
+      .filter((sentence) =>
+        keywords.some((keyword) => sentence.toLowerCase().includes(keyword)),
+      )
+      .slice(0, 4)
+      .map((sentence) => sentence.trim());
+  }
+
+  private extractPhrase(text: string, keywords: string[]): string | undefined {
+    const sentence = text
+      .split(/(?<=[.!?])\s+/)
+      .find((part) => keywords.some((keyword) => part.toLowerCase().includes(keyword)));
+    return sentence?.trim();
+  }
+
+  private extractKeywords(text: string, keywords: string[]): string[] {
+    const lower = text.toLowerCase();
+    return keywords.filter((keyword) => lower.includes(keyword)).slice(0, 8);
   }
 
   private finalizePrompt(prompt: string): string {
@@ -202,6 +298,7 @@ export class ScenePromptService {
 
       // Priority 1: Core scene/events (highest priority)
       if (
+        lowerLine.includes('exact scene:') ||
         lowerLine.includes('story section:') ||
         lowerLine.includes('scene:') ||
         lowerLine.includes('events:') ||
@@ -212,6 +309,7 @@ export class ScenePromptService {
       }
       // Priority 2: Characters
       else if (
+        lowerLine.includes('main subject:') ||
         lowerLine.includes('characters:') ||
         lowerLine.includes('character:')
       ) {
@@ -220,6 +318,8 @@ export class ScenePromptService {
       }
       // Priority 3: Setting/Location
       else if (
+        lowerLine.includes('action:') ||
+        lowerLine.includes('objects:') ||
         lowerLine.includes('location:') ||
         lowerLine.includes('setting:')
       ) {
@@ -228,6 +328,11 @@ export class ScenePromptService {
       }
       // Priority 4: Genre/Story type
       else if (
+        lowerLine.includes('environment:') ||
+        lowerLine.includes('visual phenomena:') ||
+        lowerLine.includes('lighting:') ||
+        lowerLine.includes('atmosphere:') ||
+        lowerLine.includes('spatial relationships:') ||
         lowerLine.includes('genre') ||
         lowerLine.includes('story type') ||
         lowerLine.includes('illustration for a')
@@ -351,6 +456,23 @@ export class ScenePromptService {
     return elements.join(' ');
   }
 
+  private resolveStory(story: Story, overrides?: VisualContextOverrides): Story {
+    return Object.assign(new Story(), {
+      ...story,
+      location: overrides?.location ?? story.location,
+      era: overrides?.era ?? story.era,
+      year: overrides?.year ?? story.year,
+      civilization: overrides?.civilization ?? story.civilization,
+      theme: overrides?.theme ?? story.theme,
+      storyType: overrides?.genre ?? story.storyType,
+    });
+  }
+
+  private resolveGenre(story: Story, overrides?: VisualContextOverrides): string {
+    const genre = overrides?.genre ?? story.storyType;
+    return genre ? STORY_TYPE_LABELS[genre] : 'story';
+  }
+
   private buildContinuity(
     page: StoryPage,
     allPages?: StoryPage[],
@@ -368,6 +490,6 @@ export class ScenePromptService {
     }
 
     const snippet = previous.text.trim().slice(0, CONTINUITY_SNIPPET_LENGTH);
-    return `Preserve the visual details from the previous section. Previous section content: "${snippet}...".`;
+    return `Scene continuity: preserve the visual details from the previous section. Previous section content: "${snippet}...".`;
   }
 }

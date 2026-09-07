@@ -55,11 +55,12 @@ describe('IllustrationController', () => {
       await controller.regeneratePage('u1', {
         storyId: 's-1',
         pageId: 'p-1',
-      });
+      } as any, {});
       expect(illustrationService.regeneratePage).toHaveBeenCalledWith(
         'u1',
         's-1',
         'p-1',
+        {},
       );
     });
   });
@@ -67,10 +68,11 @@ describe('IllustrationController', () => {
   describe('regenerateCover', () => {
     it('delegates to the service', async () => {
       illustrationService.regenerateCover.mockResolvedValue({ queued: true });
-      await controller.regenerateCover('u1', { storyId: 's-1' });
+      await controller.regenerateCover('u1', { storyId: 's-1' } as any, {});
       expect(illustrationService.regenerateCover).toHaveBeenCalledWith(
         'u1',
         's-1',
+        {},
       );
     });
   });

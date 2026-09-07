@@ -20,6 +20,7 @@ import { GenreVisualStyleService } from './services/genre-visual-style.service';
 import { StoryContextPromptService } from './services/story-context-prompt.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { PromptValidationService } from './services/prompt-validation.service';
+import { StoryTranslationService } from './services/story-translation.service';
 
 @Global()
 @Module({
@@ -41,6 +42,7 @@ import { PromptValidationService } from './services/prompt-validation.service';
     StoryContextPromptService,
     IllustrationStatusService,
     PromptValidationService,
+    StoryTranslationService,
     {
       provide: ILLUSTRATION_QUEUE,
       useFactory: (connection: Redis): Queue => {

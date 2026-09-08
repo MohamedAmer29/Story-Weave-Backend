@@ -192,4 +192,13 @@ export class Story {
 
   @Column({ nullable: true, type: 'timestamp' })
   coverImageGeneratedAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  genreId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  eraId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  civilizationId: string | null;
 }

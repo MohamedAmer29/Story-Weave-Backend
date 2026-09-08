@@ -31,6 +31,12 @@ import { RedisService } from '../config/redis.service';
 import { UserRole } from '../database/entities/user.entity';
 import { VisualContextOverrides } from './services/scene-prompt.service';
 import { StoryTranslationService } from './services/story-translation.service';
+import { StoryIllustrationEligibilityService } from './services/story-illustration-eligibility.service';
+import { AiUsageService } from '../ai/ai-usage.service';
+import { AI_MODEL_USAGE } from '../ai/config/ai-model-usage.config';
+import { AuditLogService } from '../admin/audit/audit-log.service';
+import { AuditAction } from '../admin/audit/audit-actions';
+import { StoryOptionsService } from '../modules/story-options/story-options.service';
 
 export interface IllustrationJobData {
   storyId: string;
@@ -38,6 +44,22 @@ export interface IllustrationJobData {
   userId: string;
   attemptId?: string | null;
   prompt: string;
+}
+
+export const CLOUDFLARE_MODEL_KEY = '@cf/black-forest-labs/flux-1-schnell';
+
+export const REMAINING_PAGES_GENERATION_TYPE = 'REMAINING_PAGES';
+
+export interface RemainingIllustrationsResponse {
+  success: boolean;
+  message: string;
+  storyId: string;
+  totalPages: number;
+  alreadyIllustrated: number;
+  pagesQueued: number;
+  pagesDeferred?: number;
+  generationStarted: boolean;
+  reason?: string;
 }
 
 const NON_REQUEUEABLE_STATUSES = [
@@ -68,7 +90,7 @@ return {1, nextValue}
 export class IllustrationService {
   private readonly logger = new Logger(IllustrationService.name);
 
-  constructor(
+constructor(
     @InjectRepository(Story)
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
@@ -80,6 +102,10 @@ export class IllustrationService {
     private readonly storyProgressService: StoryProgressService,
     private readonly redisService: RedisService,
     private readonly storyTranslationService: StoryTranslationService,
+    private readonly illustrationEligibilityService: StoryIllustrationEligibilityService,
+    private readonly aiUsageService: AiUsageService,
+    private readonly auditLogService: AuditLogService,
+    private readonly storyOptionsService: StoryOptionsService,
   ) {}
 
   async queueStoryIllustrations(
@@ -308,6 +334,351 @@ export class IllustrationService {
       storyId,
       totalPages: pages.length,
       queuedPages,
+    };
+  }
+
+  /** Queue only pages whose source text changed during story continuation. */
+  async queueAffectedPages(
+    userId: string,
+    storyId: string,
+    pageIds: string[],
+  ): Promise<number> {
+    if (pageIds.length === 0) return 0;
+
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+      relations: { user: true },
+    });
+    if (!story) throw new NotFoundException('Story not found');
+    if (story.userId !== userId) throw new ForbiddenException('Access denied');
+    this.validateStoryReady(story);
+
+    const allPages = await this.storyPageRepository.find({
+      where: { storyId },
+      order: { pageNumber: 'ASC' },
+    });
+    const requestedIds = new Set(pageIds);
+    const pages = allPages.filter((page) => requestedIds.has(page.id));
+    if (pages.length !== requestedIds.size) {
+      throw new NotFoundException('One or more story pages were not found');
+    }
+
+    await this.assertDailyImageAllowance(
+      story.user?.role ?? UserRole.USER,
+      story.userId,
+      pages.length,
+    );
+
+    const attemptId = randomUUID();
+    const claim = await this.storyRepository
+      .createQueryBuilder()
+      .update(Story)
+      .set({ illustrationGenerationAttemptId: attemptId })
+      .where('id = :id AND illustrationGenerationAttemptId IS NULL', {
+        id: storyId,
+      })
+      .execute();
+    if (!claim.affected) {
+      throw new BadRequestException(
+        'Illustration generation is already in progress for this story',
+      );
+    }
+    story.illustrationGenerationAttemptId = attemptId;
+
+    try {
+      const visualStory = await this.toVisualStory(story);
+      const visualPages = await this.toVisualPages(story, allPages);
+      let queuedPages = 0;
+
+      for (const page of pages) {
+        if (this.isRequeueableBlocked(page.imageStatus)) continue;
+        const visualPage =
+          visualPages.find((candidate) => candidate.id === page.id) ?? page;
+        const prompt = this.scenePromptService.buildImagePrompt(
+          visualStory,
+          visualPage,
+          visualPages,
+        );
+        page.imageStatus = IllustrationPageStatus.QUEUED;
+        page.imageError = null;
+        page.imagePrompt = prompt;
+        await this.storyPageRepository.save(page);
+        await this.addJob({
+          storyId,
+          storyPageId: page.id,
+          userId,
+          prompt,
+          attemptId,
+        });
+        queuedPages++;
+      }
+
+      if (queuedPages === 0) {
+        await this.releaseGenerationAttempt(storyId, attemptId);
+        return 0;
+      }
+
+      await this.resetGenerationNotified(story);
+      await this.refreshStoryStatus(story, allPages);
+      if (queuedPages > 0) {
+        await this.storyProgressService.notifyGenerationStarted(
+          userId,
+          storyId,
+          story.title,
+          queuedPages,
+        );
+      }
+      await this.storyProgressService.emitProgress({
+        storyId,
+        userId,
+        status: story.illustrationStatus ?? StoryIllustrationStatus.QUEUED,
+        progress: this.illustrationStatusService.computeStatus(allPages),
+      });
+      return queuedPages;
+} catch (error) {
+      await this.releaseGenerationAttempt(storyId, attemptId);
+      throw error;
+    }
+  }
+
+  /**
+   * Queue illustrations for every StoryPage that does not yet have a
+   * successfully generated image. Completed pages (with a valid image URL)
+   * and pages that are actively being generated are never re-queued.
+   *
+   * The existing illustration pipeline is reused unchanged: the worker still
+   * performs translation, prompt building, neuron protection, the Cloudflare
+   * FLUX call, Cloudinary upload, database update, and notifications.
+   */
+  async queueRemainingIllustrations(
+    userId: string,
+    storyId: string,
+  ): Promise<RemainingIllustrationsResponse> {
+    this.logger.log(
+      `Queueing remaining illustrations for story: ${storyId}`,
+    );
+
+    const story = await this.storyRepository.findOne({
+      where: { id: storyId },
+      relations: { pages: true, user: true },
+    });
+
+    if (!story) {
+      throw new NotFoundException('Story not found');
+    }
+
+    if (story.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    this.validateStoryReady(story);
+
+    const allPages = story.pages || [];
+    const orderedPages = [...allPages].sort(
+      (a, b) => a.pageNumber - b.pageNumber,
+    );
+    const totalPages = orderedPages.length;
+
+    const alreadyIllustrated = orderedPages.filter((page) =>
+      this.illustrationEligibilityService.isComplete(page),
+    ).length;
+
+    const eligiblePages =
+      this.illustrationEligibilityService.selectPagesRequiringIllustration(
+        orderedPages,
+      );
+
+    if (eligiblePages.length === 0) {
+      return {
+        success: true,
+        message: 'All story pages are already illustrated',
+        storyId,
+        totalPages,
+        alreadyIllustrated,
+        pagesQueued: 0,
+        generationStarted: false,
+      };
+    }
+
+    // Clear a stale generation claim so deferred/retryable runs can proceed.
+    const currentStatus = this.illustrationStatusService.computeStatus(
+      orderedPages,
+    );
+    if (
+      story.illustrationGenerationAttemptId &&
+      currentStatus.status !== StoryIllustrationStatus.GENERATING &&
+      currentStatus.status !== StoryIllustrationStatus.QUEUED
+    ) {
+      await this.storyRepository
+        .createQueryBuilder()
+        .update(Story)
+        .set({ illustrationGenerationAttemptId: null })
+        .where('id = :id AND illustrationGenerationAttemptId IS NOT NULL', {
+          id: storyId,
+        })
+        .execute();
+      story.illustrationGenerationAttemptId = null;
+    }
+
+    // Atomically claim a generation attempt so concurrent requests cannot
+    // enqueue duplicate BullMQ jobs for the same StoryPage.
+    const attemptId = randomUUID();
+    const claim = await this.storyRepository
+      .createQueryBuilder()
+      .update(Story)
+      .set({ illustrationGenerationAttemptId: attemptId })
+      .where('id = :id AND (illustrationGenerationAttemptId IS NULL)', {
+        id: storyId,
+      })
+      .execute();
+
+    if (!claim.affected || claim.affected === 0) {
+      this.logger.log(
+        `[StoryGeneration] Generation already active for story ${storyId}. Skipping duplicate request.`,
+      );
+      throw new BadRequestException(
+        'Illustration generation already in progress for this story',
+      );
+    }
+    story.illustrationGenerationAttemptId = attemptId;
+
+    // Build the translated visual representation before queueing so prompts
+    // always use the English visual content (never raw Arabic).
+    let visualStory: Story;
+    let visualPages: StoryPage[];
+    try {
+      visualStory = await this.toVisualStory(story);
+      visualPages = await this.toVisualPages(story, orderedPages);
+    } catch (error: any) {
+      await this.releaseGenerationAttempt(storyId, attemptId);
+      this.logger.error(
+        `Failed to translate story ${storyId} for visual generation: ${error?.message ?? 'Unknown error'}`,
+      );
+      throw new BadRequestException(
+        'Could not translate the story for illustration generation. Please try again.',
+      );
+    }
+
+    // Respect the existing neuron safety threshold. Never queue more jobs than
+    // the remaining daily neuron budget can cover; the worker remains the
+    // authoritative consumer via its atomic canMakeRequest check.
+    const neuronsPerRequest =
+      AI_MODEL_USAGE[CLOUDFLARE_MODEL_KEY]?.neuronsPerRequest ?? 100;
+    const usageStatus = await this.aiUsageService.getUsageStatus();
+    const affordableCount = Math.max(
+      0,
+      Math.floor(usageStatus.remaining / neuronsPerRequest),
+    );
+    const pagesToQueue = eligiblePages.slice(0, affordableCount);
+    const deferredCount = eligiblePages.length - pagesToQueue.length;
+
+    if (pagesToQueue.length === 0) {
+      await this.releaseGenerationAttempt(storyId, attemptId);
+      return {
+        success: true,
+        message:
+          'Remaining illustrations could not be queued because the daily AI generation quota is exhausted',
+        storyId,
+        totalPages,
+        alreadyIllustrated,
+        pagesQueued: 0,
+        pagesDeferred: eligiblePages.length,
+        generationStarted: false,
+        reason: 'AI neuron safety threshold reached',
+      };
+    }
+
+    let queuedPages = 0;
+    try {
+      for (const page of pagesToQueue) {
+        const visualPage =
+          visualPages.find((candidate) => candidate.id === page.id) ?? page;
+        const prompt = this.scenePromptService.buildImagePrompt(
+          visualStory,
+          visualPage,
+          visualPages,
+        );
+        page.imageStatus = IllustrationPageStatus.QUEUED;
+        page.imageError = null;
+        page.imagePrompt = prompt;
+        await this.storyPageRepository.save(page);
+
+        await this.addJob({
+          storyId,
+          storyPageId: page.id,
+          userId,
+          prompt,
+          attemptId,
+        });
+        queuedPages++;
+      }
+    } catch (error: any) {
+      await this.releaseGenerationAttempt(storyId, attemptId);
+      this.logger.error(
+        `Failed to queue remaining illustrations for story ${storyId}: ${
+          (error as Error)?.message ?? 'Unknown error'
+        }`,
+      );
+      throw new BadRequestException(
+        'Failed to queue some illustration jobs. Please try again.',
+      );
+    }
+
+    await this.refreshStoryStatus(story, orderedPages);
+    await this.resetGenerationNotified(story);
+
+    if (story.illustrationGenerationAttemptId) {
+      await this.storyProgressService.notifyGenerationStarted(
+        userId,
+        storyId,
+        story.title,
+        queuedPages,
+      );
+    }
+
+    await this.storyProgressService.emitProgress({
+      storyId,
+      userId,
+      status: story.illustrationStatus ?? StoryIllustrationStatus.QUEUED,
+      progress: this.illustrationStatusService.computeStatus(orderedPages),
+    });
+
+    void this.auditLogService.record({
+      adminId: userId,
+      action: AuditAction.STORY_GENERATION_STARTED,
+      targetType: 'STORY',
+      targetId: storyId,
+      description:
+        deferredCount > 0
+          ? `Remaining illustrations queued for "${story.title}" (${deferredCount} deferred)`
+          : `Remaining illustrations queued for "${story.title}"`,
+      metadata: {
+        storyId,
+        generationType: REMAINING_PAGES_GENERATION_TYPE,
+        pagesQueued: queuedPages,
+        ...(deferredCount > 0 ? { pagesDeferred: deferredCount } : {}),
+      },
+    });
+
+    this.logger.log(
+      `Queued ${queuedPages}/${eligiblePages.length} remaining illustrations for story: ${storyId}`,
+    );
+
+    return {
+      success: true,
+      message:
+        deferredCount > 0
+          ? 'Some remaining illustrations were queued'
+          : 'Remaining illustrations queued successfully',
+      storyId,
+      totalPages,
+      alreadyIllustrated,
+      pagesQueued: queuedPages,
+      ...(deferredCount > 0 ? { pagesDeferred: deferredCount } : {}),
+      generationStarted: true,
+      ...(deferredCount > 0
+        ? { reason: 'AI neuron safety threshold reached' }
+        : {}),
     };
   }
 
@@ -549,6 +920,16 @@ export class IllustrationService {
       story.language,
       `story:${story.id}`,
     );
+
+    const names = await this.storyOptionsService.resolveNames(
+      story.genreId,
+      story.eraId,
+      story.civilizationId,
+    );
+    (visualStory as any).optionGenreName = names.genreName;
+    (visualStory as any).optionEraName = names.eraName;
+    (visualStory as any).optionCivilizationName = names.civilizationName;
+
     return visualStory;
   }
 

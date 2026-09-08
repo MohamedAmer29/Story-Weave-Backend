@@ -23,4 +23,19 @@ describe('GenreVisualStyleService', () => {
     const scifi = svc.getVisualGuidance(StoryType.SCI_FI);
     expect(fantasy).not.toBe(scifi);
   });
+
+  it('returns guidance for the Middle-earth genres', () => {
+    expect(svc.getVisualGuidance(StoryType.LORD_OF_THE_RINGS)).toContain(
+      'epic',
+    );
+    expect(svc.getVisualGuidance(StoryType.MIDDLE_EARTH_FANTASY)).toContain(
+      'landscape',
+    );
+    expect(svc.getVisualGuidance(StoryType.HOBBIT_FANTASY)).toContain(
+      'pastoral',
+    );
+    expect(svc.getVisualGuidance(StoryType.EPIC_FANTASY)).toContain('scale');
+    expect(svc.getVisualGuidance(StoryType.HIGH_FANTASY)).toContain('magical');
+    expect(svc.getVisualGuidance(StoryType.DARK_FANTASY)).toContain('dark');
+  });
 });

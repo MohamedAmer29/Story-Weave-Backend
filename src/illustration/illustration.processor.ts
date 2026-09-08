@@ -19,15 +19,13 @@ import { AI_MODEL_USAGE } from '../ai/config/ai-model-usage.config';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { IllustrationStatusResult } from './services/illustration-status.service';
-import { IllustrationJobData } from './illustration.service';
+import { IllustrationJobData, CLOUDFLARE_MODEL_KEY } from './illustration.service';
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { PublicCacheService } from '../common/services/public-cache.service';
 import { PromptValidationService } from './services/prompt-validation.service';
 import { AuditLogService } from '../admin/audit/audit-log.service';
 import { AuditAction } from '../admin/audit/audit-actions';
 import { Redis } from 'ioredis';
-
-const CLOUDFLARE_MODEL_KEY = '@cf/black-forest-labs/flux-1-schnell';
 
 // Non-retryable error patterns (message-based)
 const NON_RETRYABLE_ERROR_PATTERNS = [

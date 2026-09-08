@@ -6,4 +6,8 @@ export default registerAs('app', () => ({
   environment: process.env.NODE_ENV || 'development',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   swaggerEnabled: process.env.SWAGGER_ENABLED === 'true',
+  trustProxy:
+    process.env.TRUST_PROXY !== undefined
+      ? process.env.TRUST_PROXY === 'true'
+      : (process.env.NODE_ENV || 'development') === 'production',
 }));

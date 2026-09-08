@@ -5,6 +5,7 @@ import {
   Logger,
   BadRequestException,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Story } from '../../database/entities/story.entity';
@@ -44,6 +45,12 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { NotificationType } from '../../notifications/notification-type.enum';
 import { AuditLogService } from '../../admin/audit/audit-log.service';
 import { AuditAction } from '../../admin/audit/audit-actions';
+import { IllustrationPageStatus } from '../../illustration/enums/illustration-page-status.enum';
+import { IllustrationService } from '../../illustration/illustration.service';
+import { AppendStoryResponseDto } from './dto/append-story-response.dto';
+import { StoryOptionsService } from '../story-options/story-options.service';
+
+const MAX_STORY_PAGE_CHARACTERS = 1000;
 
 @Injectable()
 export class StoryService {
@@ -69,6 +76,8 @@ export class StoryService {
     private readonly publicCacheService: PublicCacheService,
     private readonly notificationsService: NotificationsService,
     private readonly auditService: AuditLogService,
+    private readonly moduleRef: ModuleRef,
+    private readonly storyOptionsService: StoryOptionsService,
   ) {}
 
   async create(
@@ -98,6 +107,9 @@ export class StoryService {
         parsedStory.language ??
         undefined,
       visualStyle: createStoryDto.visualStyle,
+      genreId: createStoryDto.genreId || null,
+      eraId: createStoryDto.eraId || null,
+      civilizationId: createStoryDto.civilizationId || null,
       ...this.contextToEntity(context),
     });
 
@@ -615,6 +627,282 @@ export class StoryService {
     });
   }
 
+  async getPages(storyId: string, userId?: string) {
+    await this.storyAccessService.requireAccess(storyId, userId);
+    const pages = await this.storyPageRepository.find({ where: { storyId }, order: { pageNumber: 'ASC' } });
+    return pages.map((page) => ({
+      id: page.id,
+      pageNumber: page.pageNumber,
+      content: page.text,
+      imageUrl: page.imageUrl ?? null,
+      imageStatus: page.imageStatus ?? null,
+      generationError: page.imageError ?? null,
+      createdAt: page.createdAt,
+      updatedAt: page.updatedAt,
+    }));
+  }
+
+  async append(
+    userId: string,
+    storyId: string,
+    content?: string,
+    file?: Express.Multer.File,
+  ): Promise<AppendStoryResponseDto> {
+    await this.storyAccessService.requireOwnership(storyId, userId);
+
+    if (content !== undefined && file) {
+      throw new BadRequestException(
+        'Provide continuation text or a PDF, not both',
+      );
+    }
+    if (content === undefined && !file) {
+      throw new BadRequestException(
+        'Provide continuation text or a PDF file',
+      );
+    }
+
+    let continuation: string;
+    const source = file ? SourceType.PDF : SourceType.TEXT;
+    if (file) {
+      this.validateAppendPdf(file);
+      continuation = await this.pdfParserService.extractText(file.buffer);
+    } else {
+      continuation = content?.trim() ?? '';
+    }
+
+    if (!continuation.trim()) {
+      throw new BadRequestException('Continuation content cannot be empty');
+    }
+
+    const result = await this.dataSource.transaction(async (manager) => {
+      const story = await manager.findOne(Story, {
+        where: { id: storyId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!story) throw new NotFoundException('Story not found');
+      if (story.userId !== userId) {
+        throw new ForbiddenException('Access denied');
+      }
+
+      const current = await manager.find(StoryPage, {
+        where: { storyId },
+        order: { pageNumber: 'ASC' },
+      });
+      const appendedSource = `${story.originalText}\n\n${continuation.trim()}`;
+      const affectedIndexes: number[] = [];
+      let pagesCreated = 0;
+      let pagesUpdated = 0;
+      let next: StoryPage[];
+
+      if (current.length > 0) {
+        const continuationSections = this.storyParserService.splitIntoSections(
+          continuation.trim(),
+        );
+        const startIndex = current.length;
+        const newPages = continuationSections.map((section, idx) => {
+          const index = startIndex + idx;
+          const normalized = section.text.replace(/\s+/g, ' ').trim();
+          pagesCreated++;
+          affectedIndexes.push(index);
+          return manager.create(StoryPage, {
+            storyId,
+            pageNumber: index + 1,
+            text: section.text,
+            wordCount: normalized ? normalized.split(' ').length : 0,
+            status: PageStatus.READY,
+            imageStatus: IllustrationPageStatus.PENDING,
+            imageUrl: null,
+            imagePublicId: null,
+            imagePrompt: null,
+            imageError: null,
+            imageGeneratedAt: null,
+          } as any);
+        });
+        next = [...current, ...newPages];
+      } else {
+        const sections = this.storyParserService.splitIntoSections(appendedSource);
+        next = sections.map((section, index) => {
+          const existing = current[index];
+          const changed = !existing || existing.text !== section.text;
+          const normalized = section.text.replace(/\s+/g, ' ').trim();
+          if (changed) {
+            if (existing) {
+              pagesUpdated++;
+            } else {
+              pagesCreated++;
+            }
+            affectedIndexes.push(index);
+          }
+
+          return manager.create(StoryPage, {
+            ...(existing ?? {}),
+            storyId,
+            pageNumber: index + 1,
+            text: section.text,
+            wordCount: normalized ? normalized.split(' ').length : 0,
+            status: PageStatus.READY,
+            imageStatus: changed
+              ? IllustrationPageStatus.PENDING
+              : existing.imageStatus,
+            imageUrl: changed ? null : existing.imageUrl,
+            imagePublicId: changed ? null : existing.imagePublicId,
+            imagePrompt: changed ? null : existing.imagePrompt,
+            imageError: changed ? null : existing.imageError,
+            imageGeneratedAt: changed ? null : existing.imageGeneratedAt,
+          } as any);
+        });
+        const removed = current.slice(sections.length).map((page) => page.id);
+        if (removed.length > 0) await manager.delete(StoryPage, removed);
+      }
+
+      const savedPages = await manager.save(StoryPage, next);
+      story.originalText = appendedSource;
+      await manager.save(Story, story);
+
+      return {
+        storyId,
+        pagesCreated,
+        pagesUpdated,
+        affectedPageIds: savedPages
+          .filter((_page, index) => affectedIndexes.includes(index))
+          .map((page) => page.id),
+      };
+    });
+
+    let generationQueued = false;
+    if (result.affectedPageIds.length > 0) {
+      try {
+        const illustrationService = this.moduleRef.get(IllustrationService, {
+          strict: false,
+        });
+        await illustrationService.queueAffectedPages(
+          userId,
+          storyId,
+          result.affectedPageIds,
+        );
+        generationQueued = true;
+      } catch (error: any) {
+        // The continuation is already persisted and can be retried through the
+        // normal illustration UI if quota or queue protection blocks it.
+        this.logger.warn(
+          `Could not queue continuation illustrations for ${storyId}: ${error?.message ?? 'Unknown error'}`,
+        );
+      }
+    }
+
+    await this.publicCacheService.bust();
+    void this.auditService.record({
+      adminId: userId,
+      action: AuditAction.STORY_TEXT_APPENDED,
+      targetType: 'STORY',
+      targetId: storyId,
+      description: 'Story continuation appended',
+      metadata: {
+        storyId,
+        source,
+        pagesCreated: result.pagesCreated,
+        pagesUpdated: result.pagesUpdated,
+      },
+      ...(await this.actorInfo(userId)),
+    });
+
+    return {
+      success: true,
+      message: 'Story continuation added successfully',
+      storyId,
+      pagesCreated: result.pagesCreated,
+      pagesUpdated: result.pagesUpdated,
+      pagesRegenerationRequired: result.affectedPageIds.length,
+      generationQueued,
+    };
+  }
+
+  private validateAppendPdf(file: Express.Multer.File): void {
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('Uploaded PDF is empty');
+    }
+    if (
+      file.mimetype !== 'application/pdf' ||
+      !file.originalname.toLowerCase().endsWith('.pdf')
+    ) {
+      throw new BadRequestException(
+        'Invalid file type. Only PDF files are allowed',
+      );
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+    if (!file.buffer.slice(0, 5).toString('utf8').startsWith('%PDF')) {
+      throw new BadRequestException('Uploaded file is not a valid PDF');
+    }
+  }
+
+  async updatePage(userId: string, storyId: string, pageId: string, content: string) {
+    await this.storyAccessService.requireOwnership(storyId, userId);
+    const page = await this.storyPageRepository.findOne({ where: { id: pageId, storyId } });
+    if (!page) throw new NotFoundException('Page not found');
+    const trimmed = content.trim();
+    if (!trimmed) throw new BadRequestException('Content cannot be empty');
+    if (trimmed.length > MAX_STORY_PAGE_CHARACTERS) {
+      throw new BadRequestException('A page cannot contain more than 1000 characters');
+    }
+    const pages = await this.storyPageRepository.find({ where: { storyId }, order: { pageNumber: 'ASC' } });
+    const source = pages.map((item) => item.id === pageId ? trimmed : item.text).join('\n\n');
+    const result = await this.replaceStoryPages(userId, storyId, source, 'update');
+    void this.auditService.record({ adminId: userId, action: AuditAction.STORY_PAGE_UPDATED, targetType: 'STORY_PAGE', targetId: pageId, description: 'Story page updated', metadata: { storyId }, ...(await this.actorInfo(userId)) });
+    return result;
+  }
+
+  async deletePage(userId: string, storyId: string, pageId: string): Promise<void> {
+    await this.storyAccessService.requireOwnership(storyId, userId);
+    const pages = await this.storyPageRepository.find({ where: { storyId }, order: { pageNumber: 'ASC' } });
+    const page = pages.find((item) => item.id === pageId);
+    if (!page) throw new NotFoundException('Page not found');
+    if (pages.length === 1) throw new BadRequestException('A story must contain at least one page');
+    await this.replaceStoryPages(userId, storyId, pages.filter((item) => item.id !== pageId).map((item) => item.text).join('\n\n'), 'delete');
+    if (page.imagePublicId) void this.cloudinaryService.deleteImage(page.imagePublicId);
+    void this.auditService.record({ adminId: userId, action: AuditAction.STORY_PAGE_DELETED, targetType: 'STORY_PAGE', targetId: pageId, description: 'Story page deleted', metadata: { storyId }, ...(await this.actorInfo(userId)) });
+  }
+
+  async reorderPages(userId: string, storyId: string, pageIds: string[]) {
+    await this.storyAccessService.requireOwnership(storyId, userId);
+    const pages = await this.storyPageRepository.find({ where: { storyId }, order: { pageNumber: 'ASC' } });
+    if (pages.length !== pageIds.length || new Set(pageIds).size !== pageIds.length || pages.some((page) => !pageIds.includes(page.id))) {
+      throw new BadRequestException('pageIds must contain every page exactly once');
+    }
+    await this.dataSource.transaction(async (manager) => {
+      for (let index = 0; index < pageIds.length; index++) {
+        await manager.update(StoryPage, pageIds[index], { pageNumber: index + 1 });
+      }
+    });
+    return this.getPages(storyId, userId);
+  }
+
+  private async replaceStoryPages(userId: string, storyId: string, source: string, _operation: string) {
+    const sections = this.storyParserService.splitIntoSections(source);
+    await this.dataSource.transaction(async (manager) => {
+      const current = await manager.find(StoryPage, { where: { storyId }, order: { pageNumber: 'ASC' } });
+      const next = sections.map((section, index) => {
+        const existing = current[index];
+        const changed = !existing || existing.text !== section.text;
+        const normalized = section.text.replace(/\s+/g, ' ').trim();
+        return manager.create(StoryPage, {
+          ...(existing ?? {}), storyId, pageNumber: index + 1, text: section.text,
+          wordCount: normalized ? normalized.split(' ').length : 0,
+          status: PageStatus.READY,
+          imageStatus: changed ? IllustrationPageStatus.PENDING : existing.imageStatus,
+          imageUrl: changed ? null : existing.imageUrl,
+          imagePublicId: changed ? null : existing.imagePublicId,
+          imageError: changed ? null : existing.imageError,
+        });
+      });
+      await manager.delete(StoryPage, current.slice(sections.length).map((page) => page.id));
+      await manager.save(StoryPage, next);
+      await manager.update(Story, storyId, { originalText: source });
+    });
+    return this.getPages(storyId, userId);
+  }
+
   async createFromPdf(
     userId: string,
     file: Express.Multer.File,
@@ -748,6 +1036,9 @@ export class StoryService {
       theme: story.theme ?? undefined,
       customTheme: story.customTheme ?? undefined,
       errorMessage: story.errorMessage ?? undefined,
+      genreId: story.genreId ?? undefined,
+      eraId: story.eraId ?? undefined,
+      civilizationId: story.civilizationId ?? undefined,
       createdAt: story.createdAt,
       updatedAt: story.updatedAt,
     };

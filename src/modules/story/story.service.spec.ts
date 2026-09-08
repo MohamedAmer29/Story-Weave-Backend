@@ -29,6 +29,7 @@ import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { PublicCacheService } from '../../common/services/public-cache.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { AuditLogService } from '../../admin/audit/audit-log.service';
+import { StoryOptionsService } from '../story-options/story-options.service';
 
 describe('StoryService', () => {
   let service: StoryService;
@@ -132,6 +133,10 @@ describe('StoryService', () => {
     };
     userRepo = { findOne: jest.fn() };
     manager = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
       delete: jest.fn().mockResolvedValue(undefined),
       createQueryBuilder: jest.fn().mockReturnValue({
         delete: jest.fn().mockReturnThis(),
@@ -168,6 +173,7 @@ describe('StoryService', () => {
       parse: jest
         .fn()
         .mockReturnValue({ title: 'T', language: 'en', sections: [] }),
+      splitIntoSections: jest.fn(),
     };
     pdfParser = { extractText: jest.fn() };
     notificationsService = { create: jest.fn().mockResolvedValue({}) };
@@ -195,6 +201,10 @@ describe('StoryService', () => {
         {
           provide: AuditLogService,
           useValue: { record: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: StoryOptionsService,
+          useValue: { resolveNames: jest.fn().mockResolvedValue({}) },
         },
       ],
     }).compile();
@@ -435,6 +445,88 @@ describe('StoryService', () => {
           theme: StoryTheme.CUSTOM,
           customTheme: 'Political drama',
         }),
+      );
+    });
+  });
+
+  describe('append', () => {
+    it('appends text using the shared segmenter and preserves unchanged pages', async () => {
+      const story = makeStory({ originalText: 'Original story' });
+      const existingPage = makePage({
+        id: 'p-existing',
+        text: 'Original story',
+        imageStatus: IllustrationPageStatus.COMPLETED,
+      });
+      const newPage = makePage({ id: 'p-new', text: 'Continuation' });
+
+      accessService.requireOwnership.mockResolvedValue(story);
+      manager.findOne.mockResolvedValue(story);
+      manager.find.mockResolvedValue([existingPage]);
+      parser.splitIntoSections.mockReturnValue([
+        { order: 1, text: 'Original story' },
+        { order: 2, text: 'Continuation' },
+      ]);
+      manager.create.mockImplementation((_entity: unknown, value: any) =>
+        Object.assign(new StoryPage(), value, {
+          id: value.id ?? newPage.id,
+        }),
+      );
+      manager.save.mockImplementation(async (_entity: unknown, value: any) => value);
+
+      const result = await service.append('u-1', 's-1', 'Continuation');
+
+      expect(parser.splitIntoSections).toHaveBeenCalledWith(
+        'Original story\n\nContinuation',
+      );
+      expect(result).toMatchObject({
+        success: true,
+        pagesCreated: 1,
+        pagesUpdated: 0,
+        pagesRegenerationRequired: 1,
+        generationQueued: false,
+      });
+      expect(manager.delete).not.toHaveBeenCalled();
+      expect(existingPage.imageStatus).toBe(IllustrationPageStatus.COMPLETED);
+    });
+
+    it('rejects an empty continuation and combining text with a PDF', async () => {
+      await expect(service.append('u-1', 's-1', '   ')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(
+        service.append(
+          'u-1',
+          's-1',
+          'text',
+          { mimetype: 'application/pdf' } as Express.Multer.File,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('extracts continuation text from a validated PDF', async () => {
+      const story = makeStory({ originalText: 'Original story' });
+      accessService.requireOwnership.mockResolvedValue(story);
+      manager.findOne.mockResolvedValue(story);
+      manager.find.mockResolvedValue([makePage({ text: 'Original story' })]);
+      parser.splitIntoSections.mockReturnValue([
+        { order: 1, text: 'Original story' },
+        { order: 2, text: 'From PDF' },
+      ]);
+      pdfParser.extractText.mockResolvedValue('From PDF');
+      manager.create.mockImplementation((_entity: unknown, value: any) =>
+        Object.assign(new StoryPage(), value, { id: value.id ?? 'p-pdf' }),
+      );
+      manager.save.mockImplementation(async (_entity: unknown, value: any) => value);
+
+      await service.append('u-1', 's-1', undefined, {
+        originalname: 'continuation.pdf',
+        mimetype: 'application/pdf',
+        size: 8,
+        buffer: Buffer.from('%PDF-1.7'),
+      } as Express.Multer.File);
+
+      expect(pdfParser.extractText).toHaveBeenCalledWith(
+        Buffer.from('%PDF-1.7'),
       );
     });
   });

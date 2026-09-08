@@ -52,7 +52,7 @@ describe('RateLimitGuard', () => {
     expect(redis.getClient).not.toHaveBeenCalled();
   });
 
-  it('uses x-forwarded-for header when ip missing', async () => {
+  it('does not trust spoofable x-forwarded-for when ip is missing', async () => {
     reflector.get.mockReturnValue({ ttl: 60, limit: 5 });
     const context = makeContext();
     const request = context.switchToHttp().getRequest();
@@ -62,7 +62,19 @@ describe('RateLimitGuard', () => {
     redis.getClient.mockReturnValue({ pipeline: () => pipeline });
 
     await guard.canActivate(context);
-    expect(pipeline.incr).toHaveBeenCalledWith('rate:someHandler:8.8.8.8');
+    expect(pipeline.incr).toHaveBeenCalledWith('rate:someHandler:unknown');
+  });
+
+  it('normalizes IPv4-mapped IPv6 addresses in the key', async () => {
+    reflector.get.mockReturnValue({ ttl: 60, limit: 5 });
+    const context = makeContext();
+    const request = context.switchToHttp().getRequest();
+    request.ip = '::ffff:127.0.0.1';
+    const pipeline = makePipeline(1);
+    redis.getClient.mockReturnValue({ pipeline: () => pipeline });
+
+    await guard.canActivate(context);
+    expect(pipeline.incr).toHaveBeenCalledWith('rate:someHandler:127.0.0.1');
   });
 
   it('increments the counter and allows under the limit', async () => {

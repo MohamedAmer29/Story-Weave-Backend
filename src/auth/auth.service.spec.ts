@@ -130,7 +130,7 @@ describe('AuthService', () => {
   function makeRefreshToken(
     overrides: Partial<RefreshToken> = {},
   ): RefreshToken {
-    return Object.assign(new RefreshToken(), {
+    return {
       id: 'rt-1',
       userId: 'user-1',
       token: 'hashed-token',
@@ -141,7 +141,7 @@ describe('AuthService', () => {
       createdAt: new Date(),
       lastUsedAt: null,
       ...overrides,
-    });
+    } as RefreshToken;
   }
 
   describe('register', () => {
@@ -584,7 +584,7 @@ describe('AuthService', () => {
     it('returns sessions with current flag', async () => {
       mockRefreshTokenRepo.find.mockResolvedValue([
         makeRefreshToken({ id: 'rt-1', lastUsedAt: new Date() }),
-        makeRefreshToken({ id: 'rt-2', lastUsedAt: null }),
+        makeRefreshToken({ id: 'rt-2', lastUsedAt: undefined }),
       ]);
 
       const result = await service.getSessions('user-1', 'rt-1');
@@ -598,6 +598,7 @@ describe('AuthService', () => {
   describe('revokeSession', () => {
     it('revokes a specific session', async () => {
       mockRefreshTokenRepo.findOne.mockResolvedValue(makeRefreshToken());
+      mockUserRepo.findOne.mockResolvedValue(makeUser());
 
       const result = await service.revokeSession('user-1', 'rt-1');
 
@@ -624,6 +625,7 @@ describe('AuthService', () => {
         execute: jest.fn().mockResolvedValue({ affected: 1 }),
       };
       mockRefreshTokenRepo.createQueryBuilder.mockReturnValue(qbMock);
+      mockUserRepo.findOne.mockResolvedValue(makeUser());
 
       const result = await service.revokeOtherSessions('user-1', 'rt-1');
 
@@ -643,6 +645,7 @@ describe('AuthService', () => {
         execute: jest.fn().mockResolvedValue({ affected: 2 }),
       };
       mockRefreshTokenRepo.createQueryBuilder.mockReturnValue(qbMock);
+      mockUserRepo.findOne.mockResolvedValue(makeUser());
 
       await service.revokeOtherSessions('user-1', undefined);
 

@@ -22,6 +22,10 @@ import { IllustrationStatusService } from './services/illustration-status.servic
 import { StoryProgressService } from '../notifications/story-progress.service';
 import { RedisService } from '../config/redis.service';
 import { StoryTranslationService } from './services/story-translation.service';
+import { StoryIllustrationEligibilityService } from './services/story-illustration-eligibility.service';
+import { AiUsageService } from '../ai/ai-usage.service';
+import { AuditLogService } from '../admin/audit/audit-log.service';
+import { StoryOptionsService } from '../modules/story-options/story-options.service';
 
 describe('IllustrationService', () => {
   let service: IllustrationService;
@@ -136,6 +140,36 @@ describe('IllustrationService', () => {
             translateForVisual: jest.fn((text: string) =>
               Promise.resolve(text),
             ),
+          },
+        },
+        {
+          provide: StoryIllustrationEligibilityService,
+          useValue: {
+            assertCanGenerate: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: AiUsageService,
+          useValue: {
+            recordUsage: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: AuditLogService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: StoryOptionsService,
+          useValue: {
+            resolveNames: jest
+              .fn()
+              .mockResolvedValue({
+                genreName: null,
+                eraName: null,
+                civilizationName: null,
+              }),
           },
         },
       ],

@@ -53,15 +53,25 @@ export class AdminSystemController {
 
   @Delete('sessions/others')
   @HttpCode(HttpStatus.OK)
+  @Audit({
+    action: 'OTHER_USERS_SESSIONS_REVOKED',
+    targetType: 'USERS',
+    description: 'Revoked active sessions for all other users',
+    metadataBuilder: (req) => ({
+      currentSessionId:
+        (req as { user?: { sessionId?: string } }).user?.sessionId ?? null,
+    }),
+  })
   @ApiOperation({ summary: 'Revoke sessions for all other users' })
   async revokeOtherUserSessions(
     @CurrentUser('id') adminUserId: string,
     @CurrentUser('sessionId') currentSessionId: string | undefined,
   ) {
-    return this.systemService.revokeOtherUserSessions(
+    const result = await this.systemService.revokeOtherUserSessions(
       adminUserId,
       currentSessionId,
     );
+    return { ...result, currentSessionId };
   }
 
   @Get('ai-usage')

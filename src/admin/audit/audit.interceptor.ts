@@ -9,6 +9,7 @@ import { Observable, tap } from 'rxjs';
 import type { Request } from 'express';
 import { AuditLogService } from './audit-log.service';
 import { AUDIT_KEY, AuditMetadata } from './audit.decorator';
+import { getClientIp } from '../../common/utils/ip.util';
 
 interface AuditRequestUser {
   id?: string;
@@ -88,7 +89,7 @@ export class AuditInterceptor implements NestInterceptor {
               ? metadata.metadataBuilder(request, context)
               : {}),
           },
-          ip: request.ip ?? null,
+          ip: getClientIp(request),
           userAgent: request.headers?.['user-agent'] ?? null,
         });
       }),

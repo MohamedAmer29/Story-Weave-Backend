@@ -29,6 +29,9 @@ import { StoryShare } from './database/entities/story-share.entity';
 import { RefreshToken } from './database/entities/refresh-token.entity';
 import { Notification } from './notifications/notification.entity';
 import { AuditLog } from './admin/entities/audit-log.entity';
+import { StoryGenre } from './database/entities/story-genre.entity';
+import { StoryEraOption } from './database/entities/story-era.entity';
+import { StoryCivilizationOption } from './database/entities/story-civilization.entity';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -36,6 +39,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AdminModule } from './admin/admin.module';
+import { StoryOptionsModule } from './modules/story-options/story-options.module';
 
 @Module({
   imports: [
@@ -95,6 +99,9 @@ import { AdminModule } from './admin/admin.module';
             Notification,
             RefreshToken,
             AuditLog,
+            StoryGenre,
+            StoryEraOption,
+            StoryCivilizationOption,
           ],
           synchronize: configService.get<boolean>(
             'database.synchronize',
@@ -121,6 +128,7 @@ import { AdminModule } from './admin/admin.module';
     IllustrationModule,
     NotificationsModule,
     AdminModule,
+    StoryOptionsModule,
   ],
   controllers: [AppController],
   providers: [

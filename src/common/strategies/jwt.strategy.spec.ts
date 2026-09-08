@@ -18,9 +18,17 @@ describe('JwtStrategy', () => {
     const redisService = {
       get: jest.fn().mockResolvedValue('jti-123'),
     };
+    const refreshTokenRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'sess-123',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    };
     strategy = new JwtStrategy(
       configService,
       userRepository as any,
+      refreshTokenRepository as any,
       redisService as any,
     );
   });
@@ -81,6 +89,56 @@ describe('JwtStrategy', () => {
       expect(result.email).toBe('fresh@example.com');
       expect(result.id).toBe('u1');
       expect(result.sessionId).toBe('sess-123');
+    });
+
+    it('rejects access tokens whose session has been revoked', async () => {
+      const dbUser = {
+        id: 'u1',
+        email: 'a@b.c',
+        role: UserRole.USER,
+        isActive: true,
+      };
+      userRepository.findOne.mockResolvedValue(dbUser);
+      (strategy as any).refreshTokenRepository.findOne.mockResolvedValue({
+        id: 'sess-123',
+        revokedAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      await expect(
+        strategy.validate({
+          sub: 'u1',
+          email: 'a@b.c',
+          role: UserRole.USER,
+          sessionId: 'sess-123',
+          jti: 'jti-123',
+        } as any),
+      ).rejects.toMatchObject({ message: 'Session has been revoked' });
+    });
+
+    it('rejects access tokens whose session has expired', async () => {
+      const dbUser = {
+        id: 'u1',
+        email: 'a@b.c',
+        role: UserRole.USER,
+        isActive: true,
+      };
+      userRepository.findOne.mockResolvedValue(dbUser);
+      (strategy as any).refreshTokenRepository.findOne.mockResolvedValue({
+        id: 'sess-123',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(
+        strategy.validate({
+          sub: 'u1',
+          email: 'a@b.c',
+          role: UserRole.USER,
+          sessionId: 'sess-123',
+          jti: 'jti-123',
+        } as any),
+      ).rejects.toMatchObject({ message: 'Session has expired' });
     });
 
     it('propagates a sessionId when present', async () => {

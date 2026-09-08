@@ -22,9 +22,24 @@ const THEME_VISUAL: Partial<Record<StoryTheme, string>> = {
     'mythological atmosphere and appropriate legendary elements',
   [StoryTheme.RELIGIOUS]:
     'respectful, reverent atmosphere appropriate to the story',
+  [StoryTheme.EPIC_ADVENTURE]:
+    'epic adventurous atmosphere, sweeping scope and heroic journey',
+  [StoryTheme.HEROIC_FANTASY]:
+    'heroic fantasy atmosphere, valiant characters and legendary deeds',
+  [StoryTheme.MYTHIC_ADVENTURE]:
+    'mythic adventurous atmosphere, legendary quest and larger-than-life elements',
+  [StoryTheme.DARK_ADVENTURE]:
+    'tense adventurous atmosphere, perilous journey through shadowed places',
 };
 
 const MAX_CONTEXT_LENGTH = 1200;
+
+const ERA_LABELS: Partial<Record<StoryEra, string>> = {
+  [StoryEra.FIRST_AGE]: 'First Age',
+  [StoryEra.SECOND_AGE]: 'Second Age',
+  [StoryEra.THIRD_AGE]: 'Third Age',
+  [StoryEra.FOURTH_AGE]: 'Fourth Age',
+};
 
 function isMeaningful(value: string | null | undefined): boolean {
   return value !== null && value !== undefined && value.trim().length > 0;
@@ -37,10 +52,11 @@ function formatYear(
   if (era === StoryEra.UNSPECIFIED || era === StoryEra.MODERN) {
     return null;
   }
+  const eraLabel = ERA_LABELS[era] ?? era;
   if (year === null || year === undefined) {
-    return era;
+    return eraLabel;
   }
-  return `${year} ${era}`;
+  return `${year} ${eraLabel}`;
 }
 
 /**
@@ -56,8 +72,12 @@ export class StoryContextPromptService {
   buildContext(story: Story): string {
     const lines: string[] = [];
 
-    const yearLabel = formatYear(story.era, story.year);
-    const hasEra = story.era && story.era !== StoryEra.UNSPECIFIED;
+    const optionEraName = (story as any).optionEraName as string | null | undefined;
+    const optionCivilizationName = (story as any).optionCivilizationName as string | null | undefined;
+    const optionGenreName = (story as any).optionGenreName as string | null | undefined;
+
+    const yearLabel = optionEraName ?? formatYear(story.era, story.year);
+    const hasEra = optionEraName || (story.era && story.era !== StoryEra.UNSPECIFIED);
 
     lines.push('Historical context:');
 
@@ -65,7 +85,7 @@ export class StoryContextPromptService {
       lines.push(`Era: ${yearLabel ?? 'specified historical period'}.`);
     }
 
-    const civLabel = this.civilizationLabel(story);
+    const civLabel = optionCivilizationName || this.civilizationLabel(story);
     if (civLabel) {
       lines.push(`Civilization: ${civLabel}.`);
     }
@@ -96,6 +116,15 @@ export class StoryContextPromptService {
    * the interpretation (e.g. EGYPTIAN is NOT automatically Ancient Egyptian).
    */
   buildCivilizationGuidance(story: Story): string | null {
+    const optionCivilizationName = (story as any).optionCivilizationName as string | null | undefined;
+    const optionEraName = (story as any).optionEraName as string | null | undefined;
+
+    if (optionCivilizationName) {
+      const period = optionEraName ?? formatYear(story.era, story.year);
+      const periodPhrase = period ? ` for the ${period} period` : '';
+      return `${optionCivilizationName} visual context${periodPhrase}, period-appropriate architecture, clothing, materials, environment, and cultural details.`;
+    }
+
     if (!story.civilization) {
       return null;
     }
@@ -175,7 +204,11 @@ export class StoryContextPromptService {
       }
       return 'Custom theme';
     }
-    return story.theme.charAt(0) + story.theme.slice(1).toLowerCase();
+    return story.theme
+      .toLowerCase()
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
   private limitLength(text: string): string {

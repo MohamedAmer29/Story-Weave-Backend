@@ -11,6 +11,9 @@ import { StoryShare } from './entities/story-share.entity';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { Notification } from '../notifications/notification.entity';
 import { AuditLog } from '../admin/entities/audit-log.entity';
+import { StoryGenre } from './entities/story-genre.entity';
+import { StoryEraOption } from './entities/story-era.entity';
+import { StoryCivilizationOption } from './entities/story-civilization.entity';
 import { InitialSchema1720000000000 } from './migrations/1720000000000-initial-schema';
 import { StoryContext1739990000000 } from './migrations/1739990000000-story-context';
 import { StoryCivilizationsExpansion1741000000000 } from './migrations/1741000000000-story-civilizations-expansion';
@@ -18,6 +21,8 @@ import { AddModernGlobalCivilization1741000000001 } from './migrations/174100000
 import { AuditLogExpansion1741000000001 } from './migrations/1741000000001-audit-log-expansion';
 import { AddAuthorRole1750000000000 } from './migrations/1750000000000-add-author-role';
 import { ReplaceManagerWithAuthorRole1750000000001 } from './migrations/1750000000001-replace-manager-with-author-role';
+import { MiddleEarthFantasy1750000000002 } from './migrations/1750000000002-middle-earth-fantasy';
+import { StoryOptions1750000000003 } from './migrations/1750000000003-story-options';
 
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 
@@ -45,6 +50,9 @@ export default new DataSource({
     RefreshToken,
     Notification,
     AuditLog,
+    StoryGenre,
+    StoryEraOption,
+    StoryCivilizationOption,
   ],
   migrations: [
     InitialSchema1720000000000,
@@ -54,6 +62,8 @@ export default new DataSource({
     AuditLogExpansion1741000000001,
     AddAuthorRole1750000000000,
     ReplaceManagerWithAuthorRole1750000000001,
+    MiddleEarthFantasy1750000000002,
+    StoryOptions1750000000003,
   ],
   synchronize: false,
   logging: false,

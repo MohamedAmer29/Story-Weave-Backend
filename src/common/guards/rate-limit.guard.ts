@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RedisService } from '../../config/redis.service';
+import { getClientIp } from '../utils/ip.util';
 
 export const RATE_LIMIT_KEY = 'rateLimit';
 
@@ -33,7 +34,7 @@ export class RateLimitGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const ip = request.ip || request.headers['x-forwarded-for'] || 'unknown';
+    const ip = getClientIp(request) || 'unknown';
     const handlerName = context.getHandler().name;
     const key = `rate:${handlerName}:${ip}`;
 

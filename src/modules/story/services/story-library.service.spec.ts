@@ -94,7 +94,12 @@ describe('StoryLibraryService', () => {
 
   describe('findOwned', () => {
     it('returns paginated owned stories with summaries', async () => {
-      const stories = [makeStory()];
+      const stories = [
+        makeStory({
+          coverImageUrl: 'https://cdn/cover.jpg',
+          coverImageStatus: IllustrationPageStatus.COMPLETED,
+        }),
+      ];
       qb.getManyAndCount.mockResolvedValue([stories, 1]);
       pageQb.getRawMany.mockResolvedValueOnce([
         { storyId: 's-1', total: '5', illustrated: '3' },
@@ -253,7 +258,7 @@ describe('StoryLibraryService', () => {
       });
     });
 
-    it('uses only COMPLETED illustrations for counts and does not invent a cover from pages', async () => {
+    it('uses COMPLETED page counts without inventing a cover from page images', async () => {
       pageQb.getRawMany.mockResolvedValueOnce([
         { storyId: 's-1', total: '3', illustrated: '2' },
       ]);
@@ -266,17 +271,6 @@ describe('StoryLibraryService', () => {
       expect(result[0].totalPages).toBe(3);
       expect(result[0].illustratedPages).toBe(2);
       expect(result[0].coverImageUrl).toBeUndefined();
-
-      const coversQb = pageRepo.createQueryBuilder.mock.results[1].value;
-      expect(coversQb.andWhere).toHaveBeenCalledWith(
-        'page.imageStatus = :completed',
-        {
-          completed: IllustrationPageStatus.COMPLETED,
-        },
-      );
-      expect(coversQb.andWhere).toHaveBeenCalledWith(
-        'page.imageUrl IS NOT NULL',
-      );
     });
 
     it('prefers the dedicated cover when its generation is COMPLETED', async () => {

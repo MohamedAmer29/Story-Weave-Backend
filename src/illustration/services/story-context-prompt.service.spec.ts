@@ -48,6 +48,20 @@ describe('StoryContextPromptService', () => {
       expect(context).toContain('Era: BCE.');
     });
 
+    it('formats a Third Age context with year', () => {
+      const context = service.buildContext(
+        makeStory({ era: StoryEra.THIRD_AGE, year: 3019 }),
+      );
+      expect(context).toContain('Era: 3019 Third Age.');
+    });
+
+    it('formats an age-only context without year', () => {
+      const context = service.buildContext(
+        makeStory({ era: StoryEra.FIRST_AGE }),
+      );
+      expect(context).toContain('Era: First Age.');
+    });
+
     it('returns empty for UNSPECIFIED era without other context', () => {
       const context = service.buildContext(makeStory());
       expect(context).toBe('');
@@ -146,6 +160,44 @@ describe('StoryContextPromptService', () => {
       expect(g).toContain('Cultural context');
     });
 
+    it('produces Gondor visual guidance', () => {
+      const g = service.buildCivilizationGuidance(
+        makeStory({ civilization: StoryCivilization.GONDOR }),
+      );
+      expect(g).toContain('Gondor visual context');
+      expect(g).toContain('architecture');
+    });
+
+    it('produces Middle-earth region guidance for other-kind values', () => {
+      const g = service.buildCivilizationGuidance(
+        makeStory({ civilization: StoryCivilization.OTHER_MIDDLE_EARTH }),
+      );
+      expect(g).toContain('Fantasy cultural sphere');
+    });
+
+    it('labels the Middle-earth civilization in the context block', () => {
+      const context = service.buildContext(
+        makeStory({
+          civilization: StoryCivilization.MIDDLE_EARTH,
+          era: StoryEra.THIRD_AGE,
+          year: 3019,
+        }),
+      );
+      expect(context).toContain('Middle-earth civilization');
+      expect(context).toContain('3019 Third Age');
+    });
+
+    it('references a custom Middle-earth value as metadata', () => {
+      const g = service.buildCivilizationGuidance(
+        makeStory({
+          civilization: StoryCivilization.CUSTOM_MIDDLE_EARTH,
+          customCivilization: 'Rangers of the North',
+        }),
+      );
+      expect(g).toContain('Rangers of the North');
+      expect(g).toContain('Cultural context');
+    });
+
     it('returns null for unspecified civilization', () => {
       expect(service.buildCivilizationGuidance(makeStory())).toBeNull();
     });
@@ -171,6 +223,20 @@ describe('StoryContextPromptService', () => {
         makeStory({ theme: StoryTheme.MYSTERY }),
       );
       expect(g).toContain('suspenseful');
+    });
+
+    it('maps EPIC_ADVENTURE theme guidance', () => {
+      const g = service.buildThemeGuidance(
+        makeStory({ theme: StoryTheme.EPIC_ADVENTURE }),
+      );
+      expect(g).toContain('epic adventurous');
+    });
+
+    it('humanizes the theme label in the context block', () => {
+      const context = service.buildContext(
+        makeStory({ theme: StoryTheme.EPIC_ADVENTURE }),
+      );
+      expect(context).toContain('Theme: Epic Adventure.');
     });
 
     it('uses custom theme as metadata', () => {

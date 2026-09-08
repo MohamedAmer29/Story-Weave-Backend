@@ -17,6 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Request } from 'express';
+import { extname } from 'node:path';
 import {
   ApiTags,
   ApiOperation,
@@ -55,6 +56,13 @@ import {
   UuidTargetUserIdParamDto,
 } from '../../common/dto/uuid-param.dto';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
+import { StoryPageIdParamDto } from '../../common/dto/uuid-param.dto';
+import {
+  AppendStoryDto,
+  StoryContentDto,
+  ReorderStoryPagesDto,
+} from './dto/story-content.dto';
+import { AppendStoryResponseDto } from './dto/append-story-response.dto';
 
 // Rate limit metadata key (used by the global RateLimitGuard)
 const RATE_LIMIT_KEY = 'rateLimit';
@@ -211,6 +219,101 @@ export class StoryController {
     return this.storyService.update(userId, params.id, updateStoryDto);
   }
 
+  @Post(':id/append')
+  @RateLimit({ ttl: 300, limit: 10 })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+      fileFilter: (_req: Request, file, cb) => {
+        const isPdf =
+          file.mimetype === 'application/pdf' &&
+          extname(file.originalname).toLowerCase() === '.pdf';
+        if (!isPdf) {
+          cb(
+            new BadRequestException(
+              'Invalid file type. Only PDF files are allowed',
+            ),
+            false,
+          );
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          maxLength: 100000,
+          description: 'Continuation text',
+        },
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'PDF containing the continuation',
+        },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Append text or a PDF continuation to a story' })
+  @ApiResponse({ status: 200, type: AppendStoryResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid continuation or PDF' })
+  @ApiResponse({ status: 403, description: 'Only the story owner can append' })
+  async appendText(
+    @CurrentUser('id') userId: string,
+    @Param() params: UuidParamDto,
+    @Body() body: AppendStoryDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.storyService.append(userId, params.id, body?.content, file);
+  }
+
+  @Get(':storyId/pages')
+  @UseGuards(OptionalJwtAuthGuard)
+  async getPages(
+    @CurrentUser('id') userId: string | undefined,
+    @Param('storyId') storyId: string,
+  ) {
+    return this.storyService.getPages(storyId, userId);
+  }
+
+  @Patch(':storyId/pages/reorder')
+  async reorderPages(
+    @CurrentUser('id') userId: string,
+    @Param('storyId') storyId: string,
+    @Body() body: ReorderStoryPagesDto,
+  ) {
+    return this.storyService.reorderPages(userId, storyId, body.pageIds);
+  }
+
+  @Patch(':storyId/pages/:pageId')
+  async updatePage(
+    @CurrentUser('id') userId: string,
+    @Param() params: StoryPageIdParamDto,
+    @Body() body: StoryContentDto,
+  ) {
+    return this.storyService.updatePage(
+      userId,
+      params.storyId,
+      params.pageId,
+      body.content,
+    );
+  }
+
+  @Delete(':storyId/pages/:pageId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deletePage(
+    @CurrentUser('id') userId: string,
+    @Param() params: StoryPageIdParamDto,
+  ) {
+    return this.storyService.deletePage(userId, params.storyId, params.pageId);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a story' })
@@ -334,7 +437,17 @@ export class StoryController {
         },
         era: {
           type: 'string',
-          enum: ['BCE', 'CE', 'MODERN', 'UNSPECIFIED'],
+          enum: [
+            'BCE',
+            'CE',
+            'MODERN',
+            'FIRST_AGE',
+            'SECOND_AGE',
+            'THIRD_AGE',
+            'FOURTH_AGE',
+            'FOURTH_AGE_OF_MIDDLE_EARTH',
+            'UNSPECIFIED',
+          ],
           description: 'Optional historical era of the story',
         },
         year: {
@@ -375,6 +488,10 @@ export class StoryController {
             'DRAMA',
             'MYTHOLOGY',
             'RELIGIOUS',
+            'EPIC_ADVENTURE',
+            'HEROIC_FANTASY',
+            'MYTHIC_ADVENTURE',
+            'DARK_ADVENTURE',
             'CUSTOM',
             'UNSPECIFIED',
           ],

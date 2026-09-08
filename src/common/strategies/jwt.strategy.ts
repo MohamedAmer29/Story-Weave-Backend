@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
+import { RefreshToken } from '../../database/entities/refresh-token.entity';
 import { RedisService } from '../../config/redis.service';
 
 interface JwtPayload {
@@ -22,6 +23,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly configService: ConfigService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
     private readonly redisService: RedisService,
   ) {
     super({
@@ -47,6 +50,27 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException({
           errorCode: 'ACCESS_TOKEN_INVALIDATED',
           message: 'Access token is an old version and has been invalidated',
+        });
+      }
+    }
+
+    if (payload.sessionId) {
+      const session = await this.refreshTokenRepository.findOne({
+        where: { id: payload.sessionId, userId: payload.sub },
+        select: { id: true, revokedAt: true, expiresAt: true },
+      });
+
+      if (!session || session.revokedAt) {
+        throw new UnauthorizedException({
+          errorCode: 'ACCESS_TOKEN_INVALIDATED',
+          message: 'Session has been revoked',
+        });
+      }
+
+      if (new Date(session.expiresAt) < new Date()) {
+        throw new UnauthorizedException({
+          errorCode: 'ACCESS_TOKEN_INVALIDATED',
+          message: 'Session has expired',
         });
       }
     }

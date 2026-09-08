@@ -32,7 +32,7 @@ export class StoryLibraryItemDto {
   })
   author?: { id: string; name: string };
 
-  @ApiPropertyOptional({ description: 'First successfully illustrated page' })
+  @ApiPropertyOptional({ description: 'Dedicated story cover image' })
   coverImageUrl?: string;
 
   @ApiProperty()

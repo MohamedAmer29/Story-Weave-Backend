@@ -15,6 +15,7 @@ import { StoryLibraryService } from './services/story-library.service';
 import { IllustrationStatusService } from '../../illustration/services/illustration-status.service';
 import { NotificationsModule } from '../../notifications/notifications.module';
 import { AuditLogModule } from '../../admin/audit/audit-log.module';
+import { StoryOptionsModule } from '../story-options/story-options.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AuditLogModule } from '../../admin/audit/audit-log.module';
       Notification,
     ]),
     NotificationsModule,
+    StoryOptionsModule,
   ],
   controllers: [StoryController],
   providers: [

@@ -28,6 +28,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { getClientIp } from '../common/utils/ip.util';
 import { Public } from '../common/decorators/public.decorator';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
 import { SessionIdParamDto } from '../common/dto/uuid-param.dto';
@@ -99,7 +100,7 @@ export class AuthController {
   ) {
     const result = await this.authService.register(
       dto,
-      req.ip,
+      getClientIp(req),
       req.headers['user-agent'],
     );
 
@@ -127,7 +128,7 @@ export class AuthController {
   ) {
     const result = await this.authService.login(
       dto,
-      req.ip,
+      getClientIp(req),
       req.headers['user-agent'],
     );
 
@@ -154,7 +155,7 @@ export class AuthController {
 
     const result = await this.authService.refreshTokens(
       refreshToken,
-      req.ip,
+      getClientIp(req),
       req.headers['user-agent'],
     );
 
@@ -177,7 +178,7 @@ export class AuthController {
     const refreshToken = this.extractRefreshToken(req);
     await this.authService.logout(refreshToken, {
       userId,
-      ip: req.ip,
+      ip: getClientIp(req),
       userAgent: req.headers['user-agent'],
     });
 
@@ -198,7 +199,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.authService.logoutAll(userId, {
-      ip: req.ip,
+      ip: getClientIp(req),
       userAgent: req.headers['user-agent'],
     });
 
@@ -231,7 +232,7 @@ export class AuthController {
   ) {
     const result = await this.authService.verifyEmail(
       dto,
-      req.ip,
+      getClientIp(req),
       req.headers['user-agent'],
     );
 
@@ -298,7 +299,7 @@ export class AuthController {
     @Req() req: Request,
   ) {
     return this.authService.changePassword(userId, dto, {
-      ip: req.ip,
+      ip: getClientIp(req),
       userAgent: req.headers['user-agent'],
     });
   }
@@ -324,8 +325,12 @@ export class AuthController {
   async revokeOtherSessions(
     @CurrentUser('id') userId: string,
     @CurrentUser('sessionId') currentSessionId: string | undefined,
+    @Req() req: Request,
   ) {
-    return this.authService.revokeOtherSessions(userId, currentSessionId);
+    return this.authService.revokeOtherSessions(userId, currentSessionId, {
+      ip: getClientIp(req),
+      userAgent: req.headers['user-agent'],
+    });
   }
 
   @Delete('sessions/:sessionId')
@@ -338,7 +343,11 @@ export class AuthController {
   async revokeSession(
     @CurrentUser('id') userId: string,
     @Param() params: SessionIdParamDto,
+    @Req() req: Request,
   ) {
-    return this.authService.revokeSession(userId, params.sessionId);
+    return this.authService.revokeSession(userId, params.sessionId, {
+      ip: getClientIp(req),
+      userAgent: req.headers['user-agent'],
+    });
   }
 }

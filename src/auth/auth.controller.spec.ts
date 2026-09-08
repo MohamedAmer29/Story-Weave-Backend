@@ -293,9 +293,19 @@ describe('AuthController', () => {
         message: 'Session revoked',
       });
 
-      const result = await controller.revokeSession('user-1', 'rt-2');
+      const req = { ip: '203.0.113.1', headers: { 'user-agent': 'test' } };
+      const result = await controller.revokeSession(
+        'user-1',
+        { sessionId: 'rt-2' },
+        req as any,
+      );
 
       expect(result.message).toContain('Session revoked');
+      expect(authService.revokeSession).toHaveBeenCalledWith(
+        'user-1',
+        'rt-2',
+        { ip: '203.0.113.1', userAgent: 'test' },
+      );
     });
   });
 
@@ -305,9 +315,19 @@ describe('AuthController', () => {
         message: 'Other sessions revoked',
       });
 
-      const result = await controller.revokeOtherSessions('user-1', 'rt-1');
+      const req = { ip: '203.0.113.1', headers: { 'user-agent': 'test' } };
+      const result = await controller.revokeOtherSessions(
+        'user-1',
+        'rt-1',
+        req as any,
+      );
 
       expect(result.message).toContain('Other sessions');
+      expect(authService.revokeOtherSessions).toHaveBeenCalledWith(
+        'user-1',
+        'rt-1',
+        { ip: '203.0.113.1', userAgent: 'test' },
+      );
     });
   });
 });

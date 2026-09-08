@@ -7,6 +7,7 @@ import { StoryShare } from '../../../database/entities/story-share.entity';
 import { StoryStatus } from '../../../common/enums/story-status.enum';
 import { SourceType } from '../../../common/enums/source-type.enum';
 import { StoryVisibility } from '../../../common/enums/story-visibility.enum';
+import { StoryType } from '../../../common/enums/story-type.enum';
 import { IllustrationPageStatus } from '../../../illustration/enums/illustration-page-status.enum';
 import {
   StoryLibraryItemDto,
@@ -24,6 +25,7 @@ export interface StoryListFilters {
   status?: StoryStatus;
   visibility?: StoryVisibility;
   sourceType?: SourceType;
+  storyType?: StoryType;
 }
 
 const DEFAULT_SORT: StorySort = 'latest';
@@ -39,6 +41,8 @@ const LIST_STORY_SELECT: (keyof Story)[] = [
   'status',
   'sourceType',
   'storyType',
+  'coverImageUrl',
+  'coverImageStatus',
   'createdAt',
   'updatedAt',
 ];
@@ -91,7 +95,9 @@ export class StoryLibraryService {
   ): Promise<PaginatedLibraryResponseDto> {
     const cacheKey = `${authorId ?? 'all'}|${filters.page}|${filters.limit}|${
       filters.search ?? ''
-    }|${filters.sort ?? DEFAULT_SORT}`;
+    }|${filters.sort ?? DEFAULT_SORT}|${filters.sourceType ?? ''}|${
+      filters.storyType ?? ''
+    }`;
 
     const cached =
       await this.publicCacheService.get<PaginatedLibraryResponseDto>(
@@ -110,7 +116,7 @@ export class StoryLibraryService {
       qb.andWhere('story.userId = :authorId', { authorId });
     }
 
-    this.applySortAndSearch(qb, filters);
+    this.applyFilters(qb, filters);
 
     const result = await this.runPaginated(qb, filters);
 
@@ -153,6 +159,12 @@ export class StoryLibraryService {
     if (filters.sourceType) {
       qb.andWhere('story.sourceType = :sourceType', {
         sourceType: filters.sourceType,
+      });
+    }
+
+    if (filters.storyType) {
+      qb.andWhere('story.storyType = :storyType', {
+        storyType: filters.storyType,
       });
     }
   }
@@ -238,7 +250,7 @@ export class StoryLibraryService {
       .groupBy('page.storyId')
       .getRawMany();
 
-    const stats = new Map<string, { total: number; illustrated: number }>();
+const stats = new Map<string, { total: number; illustrated: number }>();
     for (const row of statsRaw) {
       stats.set(row.storyId, {
         total: Number(row.total) || 0,
@@ -248,6 +260,10 @@ export class StoryLibraryService {
 
     return stories.map((story) => {
       const pageStats = stats.get(story.id);
+      const coverImageUrl =
+        story.coverImageStatus === IllustrationPageStatus.COMPLETED
+          ? story.coverImageUrl ?? undefined
+          : undefined;
       return {
         id: story.id,
         title: story.title,
@@ -259,10 +275,7 @@ export class StoryLibraryService {
           id: story.userId,
           name: authorMap.get(story.userId) || 'Unknown author',
         },
-        coverImageUrl:
-          story.coverImageStatus === IllustrationPageStatus.COMPLETED
-            ? story.coverImageUrl
-            : undefined,
+        coverImageUrl,
         totalPages: pageStats?.total ?? 0,
         illustratedPages: pageStats?.illustrated ?? 0,
         createdAt: story.createdAt,

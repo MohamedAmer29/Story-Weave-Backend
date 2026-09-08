@@ -24,6 +24,7 @@ async function bootstrap() {
   const port = configService.get<number>('app.port', 3000);
   const apiPrefix = configService.get<string>('app.apiPrefix', 'api');
   const corsEnabled = configService.get<boolean>('cors.enabled', true);
+  const trustProxy = configService.get<boolean>('app.trustProxy', false);
   const corsOrigin = configService.get<string[]>('cors.origin', [
     'http://localhost:3000',
     'http://localhost:5173',
@@ -37,6 +38,14 @@ async function bootstrap() {
     configService.get<boolean>('app.swaggerEnabled', false) || !isProduction;
 
   app.setGlobalPrefix(apiPrefix);
+
+  // Trust the first proxy hop when running behind a reverse proxy (e.g.
+  // Render/Cloudflare). This makes req.ip (and everything stored/displayed in
+  // audit logs) reflect the real client IP from X-Forwarded-For instead of the
+  // proxy's address. Disabled for local development unless TRUST_PROXY=true.
+  if (trustProxy) {
+    app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  }
 
   app.use(cookieParser());
 

@@ -62,6 +62,27 @@ export class IllustrationController {
     );
   }
 
+  @Post(':storyId/illustrate-remaining')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit({ ttl: 300, limit: 5 })
+  @ApiOperation({
+    summary:
+      'Queue illustrations for all story pages that do not yet have a successful illustration',
+  })
+  @ApiResponse({ status: 202, description: 'Remaining illustrations queued' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async illustrateRemaining(
+    @CurrentUser('id') userId: string,
+    @Param() params: StoryIdParamDto,
+  ) {
+    return this.illustrationService.queueRemainingIllustrations(
+      userId,
+      params.storyId,
+    );
+  }
+
   @Post(':storyId/pages/:pageId/regenerate')
   @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit({ ttl: 300, limit: 10 })

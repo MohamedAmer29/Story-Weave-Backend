@@ -465,10 +465,15 @@ export class ScenePromptService {
       civilization: overrides?.civilization ?? story.civilization,
       theme: overrides?.theme ?? story.theme,
       storyType: overrides?.genre ?? story.storyType,
+      optionGenreName: (story as any).optionGenreName,
+      optionEraName: (story as any).optionEraName,
+      optionCivilizationName: (story as any).optionCivilizationName,
     });
   }
 
   private resolveGenre(story: Story, overrides?: VisualContextOverrides): string {
+    const optionGenreName = (story as any).optionGenreName as string | null | undefined;
+    if (optionGenreName) return optionGenreName;
     const genre = overrides?.genre ?? story.storyType;
     return genre ? STORY_TYPE_LABELS[genre] : 'story';
   }

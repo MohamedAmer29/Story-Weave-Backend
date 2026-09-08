@@ -60,6 +60,15 @@ export class StoryResponseDto {
   customTheme?: string | null;
 
   @ApiPropertyOptional()
+  genreId?: string | null;
+
+  @ApiPropertyOptional()
+  eraId?: string | null;
+
+  @ApiPropertyOptional()
+  civilizationId?: string | null;
+
+  @ApiPropertyOptional()
   errorMessage?: string;
 
   @ApiProperty()

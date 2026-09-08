@@ -7,6 +7,7 @@ import {
   IsInt,
   Min,
   Max,
+  IsUUID,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SourceType } from '../../../common/enums/source-type.enum';
@@ -30,14 +31,15 @@ export class CreateStoryDto {
   @MaxLength(500)
   description?: string;
 
-  @ApiProperty({
-    description: 'Story type (genre)',
+  @ApiPropertyOptional({
+    description:
+      'Legacy story type (genre). Optional when a catalog genre (`genreId`) is selected.',
     enum: StoryType,
     example: StoryType.FANTASY,
   })
   @IsEnum(StoryType)
-  @IsNotEmpty()
-  storyType: StoryType;
+  @IsOptional()
+  storyType?: StoryType;
 
   @ApiProperty({ description: 'Original story text', type: String })
   @IsString()
@@ -77,6 +79,27 @@ export class CreateStoryDto {
   @IsOptional()
   @MaxLength(1000)
   visualStyle?: string;
+
+  @ApiPropertyOptional({
+    description: 'Story genre ID (takes precedence over storyType)',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  genreId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Historical era ID (takes precedence over era enum)',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  eraId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Civilization ID (takes precedence over civilization enum)',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  civilizationId?: string;
 
   @ApiPropertyOptional({
     description: 'Historical era of the story',

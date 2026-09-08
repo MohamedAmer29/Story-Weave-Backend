@@ -111,6 +111,23 @@ describe('StoryContextService', () => {
       expect(out.customCivilization).toBe('Dinka chiefdom');
     });
 
+    it('rejects CUSTOM_MIDDLE_EARTH without custom text', () => {
+      expect(() =>
+        service.normalize({
+          civilization: StoryCivilization.CUSTOM_MIDDLE_EARTH,
+        }),
+      ).toThrow(BadRequestException);
+    });
+
+    it('accepts CUSTOM_MIDDLE_EARTH with valid custom text', () => {
+      const out = service.normalize({
+        civilization: StoryCivilization.CUSTOM_MIDDLE_EARTH,
+        customCivilization: ' Rangers of the North ',
+      });
+      expect(out.civilization).toBe(StoryCivilization.CUSTOM_MIDDLE_EARTH);
+      expect(out.customCivilization).toBe('Rangers of the North');
+    });
+
     it('ignores custom civilization text for non-custom values', () => {
       const out = service.normalize({
         civilization: StoryCivilization.OTHER_AFRICAN,

@@ -14,6 +14,12 @@ export const STORY_TYPE_LABELS: Record<StoryType, string> = {
   [StoryType.CHILDREN]: 'Children',
   [StoryType.ACTION]: 'Action',
   [StoryType.THRILLER]: 'Thriller',
+  [StoryType.LORD_OF_THE_RINGS]: 'Lord of the Rings',
+  [StoryType.MIDDLE_EARTH_FANTASY]: 'Middle-earth Fantasy',
+  [StoryType.HOBBIT_FANTASY]: 'Hobbit Fantasy',
+  [StoryType.EPIC_FANTASY]: 'Epic Fantasy',
+  [StoryType.HIGH_FANTASY]: 'High Fantasy',
+  [StoryType.DARK_FANTASY]: 'Dark Fantasy',
 };
 
 export const STORY_TYPES: StoryType[] = Object.values(StoryType);

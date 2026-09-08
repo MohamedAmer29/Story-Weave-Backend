@@ -21,6 +21,7 @@ import { LoginDto } from './dto/login.dto';
 import { RedisService } from '../config/redis.service';
 import { AuditLogService } from '../admin/audit/audit-log.service';
 import { AuditAction } from '../admin/audit/audit-actions';
+import { normalizeIp } from '../common/utils/ip.util';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -308,6 +309,7 @@ export class AuthService {
 
     await this.refreshTokenRepository.update(refreshToken.id, {
       revokedAt: new Date(),
+      lastUsedAt: new Date(),
     });
 
     const { token: newRefreshToken, refreshToken: savedRefreshToken } =
@@ -344,6 +346,10 @@ export class AuthService {
       ip: metadata?.ip ?? null,
       userAgent: metadata?.userAgent ?? null,
     });
+
+    if (metadata?.userId) {
+      await this.redisService.del(`active_token:${metadata.userId}`);
+    }
   }
 
   async logoutAll(
@@ -356,11 +362,13 @@ export class AuthService {
     );
     this.logger.log(`All sessions revoked for user: ${userId}`);
 
+    await this.redisService.del(`active_token:${userId}`);
+
     void this.auditService.record({
       adminId: userId,
       actorName: null,
       actorRole: null,
-      action: AuditAction.LOGOUT,
+      action: AuditAction.ALL_SESSIONS_REVOKED,
       targetType: 'AUTH',
       targetId: userId,
       description: 'All sessions revoked',
@@ -637,7 +645,7 @@ export class AuthService {
     return sessions.map((session) => ({
       id: session.id,
       device: session.userAgent || 'Unknown device',
-      ipAddress: session.ipAddress || 'Unknown',
+      ipAddress: normalizeIp(session.ipAddress) ?? 'Unknown',
       createdAt: session.createdAt,
       lastUsedAt: session.lastUsedAt,
       expiresAt: session.expiresAt,
@@ -645,7 +653,11 @@ export class AuthService {
     }));
   }
 
-  async revokeSession(userId: string, sessionId: string) {
+  async revokeSession(
+    userId: string,
+    sessionId: string,
+    metadata?: { ip?: string; userAgent?: string },
+  ) {
     const session = await this.refreshTokenRepository.findOne({
       where: { id: sessionId, userId },
     });
@@ -662,10 +674,29 @@ export class AuthService {
       revokedAt: new Date(),
     });
 
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    void this.auditService.record({
+      adminId: userId,
+      adminEmail: user?.email ?? null,
+      actorName: user?.name ?? null,
+      actorRole: user?.role ?? null,
+      action: AuditAction.SESSION_REVOKED,
+      targetType: 'AUTH_SESSION',
+      targetId: session.id,
+      description: `Session revoked for user ${user?.name ?? user?.email ?? userId}`,
+      ip: metadata?.ip ?? null,
+      userAgent: metadata?.userAgent ?? null,
+    });
+
     return { message: 'Session revoked' };
   }
 
-  async revokeOtherSessions(userId: string, currentSessionId?: string) {
+  async revokeOtherSessions(
+    userId: string,
+    currentSessionId?: string,
+    metadata?: { ip?: string; userAgent?: string },
+  ) {
     const query = this.refreshTokenRepository
       .createQueryBuilder()
       .update(RefreshToken)
@@ -678,6 +709,21 @@ export class AuthService {
     }
 
     await query.execute();
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    void this.auditService.record({
+      adminId: userId,
+      adminEmail: user?.email ?? null,
+      actorName: user?.name ?? null,
+      actorRole: user?.role ?? null,
+      action: AuditAction.OTHER_SESSIONS_REVOKED,
+      targetType: 'AUTH',
+      targetId: user?.id ?? userId,
+      description: `Other sessions revoked for user ${user?.name ?? user?.email ?? userId}`,
+      ip: metadata?.ip ?? null,
+      userAgent: metadata?.userAgent ?? null,
+    });
 
     return { message: 'Other sessions revoked' };
   }

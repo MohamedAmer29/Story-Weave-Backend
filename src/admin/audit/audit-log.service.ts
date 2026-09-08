@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditLog } from '../entities/audit-log.entity';
+import { normalizeIp } from '../../common/utils/ip.util';
 
 export interface RecordAuditInput {
   adminId: string;
@@ -65,7 +66,9 @@ export class AuditLogService {
   }
 
   async findById(id: string): Promise<AuditLog | null> {
-    return this.auditRepository.findOne({ where: { id } });
+    const entry = await this.auditRepository.findOne({ where: { id } });
+    if (entry) entry.ip = normalizeIp(entry.ip);
+    return entry;
   }
 
   async list(query: AuditListQuery): Promise<{
@@ -123,9 +126,13 @@ export class AuditLogService {
     }
 
     const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const normalized = data.map((entry) => ({
+      ...entry,
+      ip: normalizeIp(entry.ip),
+    }));
 
     return {
-      data,
+      data: normalized,
       meta: {
         page,
         limit,

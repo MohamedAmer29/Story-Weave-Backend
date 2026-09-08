@@ -16,14 +16,15 @@ import { StoryCivilization } from '../../../common/enums/story-civilization.enum
 import { StoryTheme } from '../../../common/enums/story-theme.enum';
 
 export class UploadPdfDto {
-  @ApiProperty({
-    description: 'Story type (genre) used for genre-aware illustrations',
+  @ApiPropertyOptional({
+    description:
+      'Legacy story type (genre). Optional when a catalog genre (`genreId`) is selected.',
     enum: StoryType,
     example: StoryType.FANTASY,
   })
   @IsEnum(StoryType)
-  @IsNotEmpty()
-  storyType: StoryType;
+  @IsOptional()
+  storyType?: StoryType;
 
   @ApiPropertyOptional({
     description: 'Optional visual style for illustrations',

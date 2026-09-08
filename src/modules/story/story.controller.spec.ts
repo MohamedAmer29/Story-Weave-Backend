@@ -20,6 +20,7 @@ describe('StoryController', () => {
     removeShare: jest.Mock;
     listShares: jest.Mock;
     createFromPdf: jest.Mock;
+    append: jest.Mock;
   };
   let libraryService: {
     findPublic: jest.Mock;
@@ -51,6 +52,7 @@ describe('StoryController', () => {
       removeShare: jest.fn().mockResolvedValue(undefined),
       listShares: jest.fn(),
       createFromPdf: jest.fn(),
+      append: jest.fn(),
     };
     libraryService = { findPublic: jest.fn() };
     controller = new StoryController(
@@ -202,6 +204,34 @@ describe('StoryController', () => {
     });
   });
 
+  describe('append', () => {
+    it('delegates text continuation with the optional file', async () => {
+      storyService.append.mockResolvedValue({
+        success: true,
+        storyId: 's1',
+      });
+      const file = {
+        originalname: 'continuation.pdf',
+        mimetype: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.7'),
+      };
+
+      await controller.appendText(
+        'u1',
+        { id: 's1' },
+        { content: undefined },
+        file as any,
+      );
+
+      expect(storyService.append).toHaveBeenCalledWith(
+        'u1',
+        's1',
+        undefined,
+        file,
+      );
+    });
+  });
+
   describe('getTypes', () => {
     it('returns formatted story type options', async () => {
       const result = await controller.getTypes();
@@ -221,6 +251,14 @@ describe('StoryController', () => {
       expect(africa!.options[0].value).toBe('ANCIENT_EGYPTIAN');
       const custom = africa!.options.find((o) => o.kind === 'custom');
       expect(custom).toBeDefined();
+      const fantasy = data.find((r) => r.id === 'Fantasy');
+      expect(fantasy).toBeDefined();
+      expect(fantasy!.options.map((o) => o.value)).toContain('MIDDLE_EARTH');
+      const meCustom = fantasy!.options.find(
+        (o) => o.value === 'CUSTOM_MIDDLE_EARTH',
+      );
+      expect(meCustom?.kind).toBe('custom');
+      expect(meCustom?.label).toBe('Custom Middle-earth');
     });
   });
 });

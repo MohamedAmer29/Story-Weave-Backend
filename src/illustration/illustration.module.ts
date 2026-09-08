@@ -5,6 +5,7 @@ import { Redis } from 'ioredis';
 import { Story } from '../database/entities/story.entity';
 import { StoryPage } from '../database/entities/story-page.entity';
 import { StoryModule } from '../modules/story/story.module';
+import { StoryOptionsModule } from '../modules/story-options/story-options.module';
 import { AIModule } from '../modules/ai/ai.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BullMQModule } from '../bullmq/bullmq.module';
@@ -21,12 +22,14 @@ import { StoryContextPromptService } from './services/story-context-prompt.servi
 import { IllustrationStatusService } from './services/illustration-status.service';
 import { PromptValidationService } from './services/prompt-validation.service';
 import { StoryTranslationService } from './services/story-translation.service';
+import { StoryIllustrationEligibilityService } from './services/story-illustration-eligibility.service';
 
 @Global()
 @Module({
   imports: [
     TypeOrmModule.forFeature([Story, StoryPage]),
     StoryModule,
+    StoryOptionsModule,
     AIModule,
     NotificationsModule,
     BullMQModule,
@@ -43,6 +46,7 @@ import { StoryTranslationService } from './services/story-translation.service';
     IllustrationStatusService,
     PromptValidationService,
     StoryTranslationService,
+    StoryIllustrationEligibilityService,
     {
       provide: ILLUSTRATION_QUEUE,
       useFactory: (connection: Redis): Queue => {

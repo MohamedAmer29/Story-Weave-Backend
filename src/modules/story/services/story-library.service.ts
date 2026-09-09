@@ -4,6 +4,7 @@ import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Story } from '../../../database/entities/story.entity';
 import { StoryPage } from '../../../database/entities/story-page.entity';
 import { StoryShare } from '../../../database/entities/story-share.entity';
+import { StoryFavorite } from '../../../database/entities/story-favorite.entity';
 import { StoryStatus } from '../../../common/enums/story-status.enum';
 import { SourceType } from '../../../common/enums/source-type.enum';
 import { StoryVisibility } from '../../../common/enums/story-visibility.enum';
@@ -54,6 +55,8 @@ export class StoryLibraryService {
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
     private readonly storyPageRepository: Repository<StoryPage>,
+    @InjectRepository(StoryFavorite)
+    private readonly storyFavoriteRepository: Repository<StoryFavorite>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly publicCacheService: PublicCacheService,
@@ -123,6 +126,62 @@ export class StoryLibraryService {
     await this.publicCacheService.set('public-stories', cacheKey, result);
 
     return result;
+  }
+
+  async findFavorites(
+    userId: string,
+    filters: StoryListFilters,
+  ): Promise<PaginatedLibraryResponseDto> {
+    const page = filters.page < 1 ? 1 : filters.page;
+    const limit = filters.limit;
+    const skip = (page - 1) * limit;
+
+    const favoriteQb = this.storyFavoriteRepository
+      .createQueryBuilder('favorite')
+      .select(['favorite.storyId', 'favorite.createdAt'])
+      .where('favorite.userId = :userId', { userId })
+      .orderBy('favorite.createdAt', 'DESC');
+
+    if (filters.search) {
+      favoriteQb
+        .innerJoin(Story, 'story', 'story.id = favorite.storyId')
+        .andWhere(
+          '(story.title ILIKE :search OR story.description ILIKE :search)',
+          { search: `%${filters.search}%` },
+        );
+    }
+
+    const [favorites, total] = await favoriteQb
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const storyIds = favorites.map((favorite) => favorite.storyId);
+
+    let data: StoryLibraryItemDto[] = [];
+    if (storyIds.length > 0) {
+      const stories = await this.storyRepository
+        .createQueryBuilder('story')
+        .where('story.id IN (:...storyIds)', { storyIds })
+        .getMany();
+
+      const storyById = new Map(stories.map((story) => [story.id, story]));
+      const ordered = storyIds
+        .map((id) => storyById.get(id))
+        .filter((story): story is Story => Boolean(story));
+
+      data = await this.attachSummaries(ordered);
+    }
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total > 0 ? Math.ceil(total / limit) : 0,
+      },
+    };
   }
 
   async findRecent(

@@ -12,7 +12,7 @@ describe('CloudflareProvider', () => {
     const values: Record<string, unknown> = {
       'ai.cloudflareAccountId': 'acct-1',
       'ai.cloudflareApiToken': 'token-1',
-      'ai.model': '@cf/black-forest-labs/flux-1-schnell',
+      'ai.model': '@cf/black-forest-labs/flux-2-klein-9b',
       ...overrides,
     };
     return {
@@ -86,10 +86,29 @@ describe('CloudflareProvider', () => {
       expect(result.buffer.toString()).toBe('fake-image-bytes');
 
       const [url, body, config] = httpService.post.mock.calls[0];
-      expect(url).toContain('/ai/run/@cf/black-forest-labs/flux-1-schnell');
-      expect(body).toEqual({ prompt: 'a beautiful scene' });
+      expect(url).toContain('/ai/run/@cf/black-forest-labs/flux-2-klein-9b');
+      expect(body).toBeInstanceOf(FormData);
+      expect((body as FormData).get('prompt')).toBe('a beautiful scene');
+      expect(config.headers.ContentType).toBeUndefined();
       expect(config.headers.Authorization).toBe('Bearer token-1');
       expect(config.timeout).toBe(60000);
+    });
+
+    it('sends a JSON body for models that do not require multipart', async () => {
+      httpService.post.mockReturnValue(
+        of({ data: { success: true, result: { image: 'aGk=' } }, status: 200 }),
+      );
+      provider = new CloudflareProvider(
+        makeConfig({ 'ai.model': '@cf/black-forest-labs/flux-1-schnell' }),
+        httpService as unknown as HttpService,
+      );
+
+      await provider.generateImage('a sunset');
+
+      const [url, body, config] = httpService.post.mock.calls[0];
+      expect(url).toContain('/ai/run/@cf/black-forest-labs/flux-1-schnell');
+      expect(body).toEqual({ prompt: 'a sunset' });
+      expect(config.headers['Content-Type']).toBe('application/json');
     });
 
     it('throws when API reports success=false with errors', async () => {
@@ -125,8 +144,9 @@ describe('CloudflareProvider', () => {
         }),
       );
       await provider.generateImage(longPrompt.trim());
-      const body = httpService.post.mock.calls[0][1];
-      expect(body.prompt.length).toBeLessThanOrEqual(2048);
+      const body = httpService.post.mock.calls[0][1] as FormData;
+      const prompt = body.get('prompt') as string;
+      expect(prompt.length).toBeLessThanOrEqual(2048);
     });
   });
 

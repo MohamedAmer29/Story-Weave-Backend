@@ -90,7 +90,7 @@ export class AiUsageService {
 
   getSafetyLimit(): number {
     const safetyLimit = parseInt(
-      process.env.AI_NEURON_SAFETY_LIMIT || '9500',
+      process.env.AI_NEURON_SAFETY_LIMIT || '8700',
       10,
     );
     return safetyLimit;

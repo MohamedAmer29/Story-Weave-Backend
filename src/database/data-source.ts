@@ -23,6 +23,10 @@ import { AddAuthorRole1750000000000 } from './migrations/1750000000000-add-autho
 import { ReplaceManagerWithAuthorRole1750000000001 } from './migrations/1750000000001-replace-manager-with-author-role';
 import { MiddleEarthFantasy1750000000002 } from './migrations/1750000000002-middle-earth-fantasy';
 import { StoryOptions1750000000003 } from './migrations/1750000000003-story-options';
+import { SeedCivilizationsCatalog1750000000004 } from './migrations/1750000000004-seed-civilizations-catalog';
+import { AddFourthAgeMiddleEarthEra1750000000005 } from './migrations/1750000000005-add-fourth-age-middle-earth-era';
+import { AddStoryFavorites1750000000006 } from './migrations/1750000000006-add-story-favorites';
+import { StoryFavorite } from './entities/story-favorite.entity';
 
 const sslEnabled = process.env.DATABASE_SSL === 'true';
 
@@ -53,6 +57,7 @@ export default new DataSource({
     StoryGenre,
     StoryEraOption,
     StoryCivilizationOption,
+    StoryFavorite,
   ],
   migrations: [
     InitialSchema1720000000000,
@@ -64,6 +69,9 @@ export default new DataSource({
     ReplaceManagerWithAuthorRole1750000000001,
     MiddleEarthFantasy1750000000002,
     StoryOptions1750000000003,
+    SeedCivilizationsCatalog1750000000004,
+    AddFourthAgeMiddleEarthEra1750000000005,
+    AddStoryFavorites1750000000006,
   ],
   synchronize: false,
   logging: false,

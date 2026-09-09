@@ -16,7 +16,7 @@ describe('AIService', () => {
   const makeConfig = (provider: string) => {
     const values: Record<string, unknown> = {
       'ai.provider': provider,
-      'ai.model': '@cf/black-forest-labs/flux-1-schnell',
+      'ai.model': '@cf/black-forest-labs/flux-2-klein-9b',
     };
     return {
       get: jest.fn((k: string) => values[k]),
@@ -68,7 +68,7 @@ describe('AIService', () => {
       const result = await service.generateTestImage('a test prompt');
 
       expect(usageService.canMakeRequest).toHaveBeenCalledWith(
-        '@cf/black-forest-labs/flux-1-schnell',
+        '@cf/black-forest-labs/flux-2-klein-9b',
         100,
       );
       expect(cloudflareProvider.generateImage).toHaveBeenCalledWith(

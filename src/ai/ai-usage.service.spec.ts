@@ -51,7 +51,7 @@ describe('AiUsageService', () => {
   });
 
   describe('canMakeRequest', () => {
-    const MODEL = '@cf/black-forest-labs/flux-1-schnell';
+    const MODEL = '@cf/black-forest-labs/flux-2-klein-9b';
 
     it('denies the request when no redis client is available', async () => {
       redis.getClient.mockReturnValue(null);
@@ -68,7 +68,7 @@ describe('AiUsageService', () => {
       const result = await service.canMakeRequest(MODEL);
       expect(result.allowed).toBe(true);
       expect(result.used).toBe(5000);
-      expect(result.remaining).toBe(4500);
+      expect(result.remaining).toBe(3700);
       expect(mockClient.eval).toHaveBeenCalledTimes(1);
     });
 
@@ -109,8 +109,8 @@ describe('AiUsageService', () => {
   });
 
   describe('getSafetyLimit', () => {
-    it('defaults to 9500 when env not set', () => {
-      expect(service.getSafetyLimit()).toBe(9500);
+    it('defaults to 8700 when env not set', () => {
+      expect(service.getSafetyLimit()).toBe(8700);
     });
 
     it('reads from environment variable', () => {
@@ -135,19 +135,19 @@ describe('AiUsageService', () => {
 
   describe('getUsageStatus', () => {
     it('reports blocked state and percentage', async () => {
-      mockClient.get.mockResolvedValue('9500');
+      mockClient.get.mockResolvedValue('8700');
       const status = await service.getUsageStatus();
-      expect(status.used).toBe(9500);
+      expect(status.used).toBe(8700);
       expect(status.blocked).toBe(true);
       expect(status.remaining).toBe(0);
       expect(status.percentage).toBe(100);
-      expect(status.limit).toBe(9500);
+      expect(status.limit).toBe(8700);
     });
 
     it('computes percentage and remaining for partial usage', async () => {
-      mockClient.get.mockResolvedValue('4750');
+      mockClient.get.mockResolvedValue('4350');
       const status = await service.getUsageStatus();
-      expect(status.remaining).toBe(4750);
+      expect(status.remaining).toBe(4350);
       expect(status.blocked).toBe(false);
       expect(status.percentage).toBe(50);
     });

@@ -442,19 +442,32 @@ export class StoryService {
 
     const status = this.illustrationStatusService.computeStatus(pages);
 
+    const names = await this.storyOptionsService.resolveNames(
+      story.genreId,
+      story.eraId,
+      story.civilizationId,
+    );
+
     return {
       id: story.id,
       title: story.title,
       storyType: story.storyType ?? null,
+      genreId: story.genreId ?? null,
+      genreName: names.genreName,
+      visualStyle: story.visualStyle ?? null,
       description: story.description ?? null,
       visibility: story.visibility,
       status: story.status,
       sourceType: story.sourceType,
       language: story.language ?? null,
       era: story.era ?? null,
+      eraId: story.eraId ?? null,
+      eraName: names.eraName,
       year: story.year ?? null,
       location: story.location ?? null,
       civilization: story.civilization ?? null,
+      civilizationId: story.civilizationId ?? null,
+      civilizationName: names.civilizationName,
       customCivilization: story.customCivilization ?? null,
       theme: story.theme ?? null,
       customTheme: story.customTheme ?? null,

@@ -53,7 +53,7 @@ export class AIController {
       success: true,
       data: {
         dailyLimit: Number(process.env.AI_DAILY_NEURON_LIMIT) || 10000,
-        safetyLimit: Number(process.env.AI_NEURON_SAFETY_LIMIT) || 9500,
+        safetyLimit: Number(process.env.AI_NEURON_SAFETY_LIMIT) || 8700,
         used: status.used,
         remainingUntilSafetyLimit: status.remaining,
         percentageUsed: status.percentage,

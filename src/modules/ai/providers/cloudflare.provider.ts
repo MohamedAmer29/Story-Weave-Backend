@@ -22,6 +22,15 @@ interface CloudflareResponse {
   success: boolean;
 }
 
+/**
+ * FLUX.2 models (dev / klein) require multipart/form-data inputs on the
+ * Workers AI REST API, while the older text-to-image models take a JSON body.
+ */
+function requiresMultipart(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return normalized.includes('flux-2') || normalized.includes('flux2');
+}
+
 @Injectable()
 export class CloudflareProvider implements AIProvider {
   private readonly logger = new Logger(CloudflareProvider.name);
@@ -90,20 +99,26 @@ export class CloudflareProvider implements AIProvider {
     }
 
     try {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${apiToken}`,
+      };
+
+      let requestBody: unknown = { prompt: sendPrompt };
+      if (requiresMultipart(model)) {
+        const form = new FormData();
+        form.append('prompt', sendPrompt);
+        requestBody = form;
+      } else {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      // Note: for multipart bodies the Content-Type header (including the
+      // boundary) is set automatically by axios.
       const response = await firstValueFrom(
-        this.httpService.post<CloudflareResponse>(
-          fullUrl,
-          {
-            prompt: sendPrompt,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${apiToken}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 60000,
-          },
-        ),
+        this.httpService.post<CloudflareResponse>(fullUrl, requestBody, {
+          headers,
+          timeout: 60000,
+        }),
       );
 
       this.logger.log(`Cloudflare API response status: ${response.status}`);

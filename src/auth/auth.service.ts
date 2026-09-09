@@ -25,6 +25,30 @@ import { normalizeIp } from '../common/utils/ip.util';
 
 const BCRYPT_ROUNDS = 12;
 
+const MS_PER_SECOND = 1000;
+const ACCESS_TOKEN_DEFAULT_MS = 15 * 60 * 1000;
+
+/** Parses a JWT duration like '15m', '1h', '900' (seconds) or '45000ms' into ms. */
+function parseDurationToMs(value: string): number {
+  const match = /^(\d+)\s*(ms|s|m|h|d)?$/i.exec(String(value).trim());
+  if (!match) return ACCESS_TOKEN_DEFAULT_MS;
+  const amount = Number(match[1]);
+  const unit = (match[2] ?? 's').toLowerCase();
+  if (Number.isNaN(amount)) return ACCESS_TOKEN_DEFAULT_MS;
+  switch (unit) {
+    case 'ms':
+      return amount;
+    case 'm':
+      return amount * 60 * MS_PER_SECOND;
+    case 'h':
+      return amount * 60 * 60 * MS_PER_SECOND;
+    case 'd':
+      return amount * 24 * 60 * 60 * MS_PER_SECOND;
+    default:
+      return amount * MS_PER_SECOND;
+  }
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -48,6 +72,11 @@ export class AuthService {
 
   private get refreshRememberMeDays(): number {
     return this.configService.get<number>('auth.refreshRememberMeDays', 30);
+  }
+
+  private get accessTokenTtlMs(): number {
+    const expiresIn = this.configService.get<string>('jwt.expiresIn', '15m');
+    return parseDurationToMs(expiresIn);
   }
 
   private get resetTokenExpiresIn(): string {
@@ -77,7 +106,11 @@ export class AuthService {
     if (sessionId) {
       payload.sessionId = sessionId;
     }
-    await this.redisService.set(`active_token:${user.id}`, jti, 15 * 60 * 1000);
+    await this.redisService.set(
+      `active_token:${user.id}`,
+      jti,
+      this.accessTokenTtlMs,
+    );
     return this.jwtService.sign(payload);
   }
 

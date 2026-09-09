@@ -90,7 +90,7 @@ return {1, nextValue}
 export class IllustrationService {
   private readonly logger = new Logger(IllustrationService.name);
 
-constructor(
+  constructor(
     @InjectRepository(Story)
     private readonly storyRepository: Repository<Story>,
     @InjectRepository(StoryPage)
@@ -254,7 +254,8 @@ constructor(
       const previousStatus = page.imageStatus ?? IllustrationPageStatus.PENDING;
 
       try {
-        const visualPage = visualPages.find((candidate) => candidate.id === page.id) ?? page;
+        const visualPage =
+          visualPages.find((candidate) => candidate.id === page.id) ?? page;
         const prompt = this.scenePromptService.buildImagePrompt(
           visualStory,
           visualPage,
@@ -435,7 +436,7 @@ constructor(
         progress: this.illustrationStatusService.computeStatus(allPages),
       });
       return queuedPages;
-} catch (error) {
+    } catch (error) {
       await this.releaseGenerationAttempt(storyId, attemptId);
       throw error;
     }
@@ -454,9 +455,7 @@ constructor(
     userId: string,
     storyId: string,
   ): Promise<RemainingIllustrationsResponse> {
-    this.logger.log(
-      `Queueing remaining illustrations for story: ${storyId}`,
-    );
+    this.logger.log(`Queueing remaining illustrations for story: ${storyId}`);
 
     const story = await this.storyRepository.findOne({
       where: { id: storyId },
@@ -501,9 +500,8 @@ constructor(
     }
 
     // Clear a stale generation claim so deferred/retryable runs can proceed.
-    const currentStatus = this.illustrationStatusService.computeStatus(
-      orderedPages,
-    );
+    const currentStatus =
+      this.illustrationStatusService.computeStatus(orderedPages);
     if (
       story.illustrationGenerationAttemptId &&
       currentStatus.status !== StoryIllustrationStatus.GENERATING &&
@@ -706,7 +704,11 @@ constructor(
     }
 
     this.validateStoryReady(story);
-    await this.assertDailyImageAllowance(story.user?.role ?? UserRole.USER, story.userId, 1);
+    await this.assertDailyImageAllowance(
+      story.user?.role ?? UserRole.USER,
+      story.userId,
+      1,
+    );
 
     const page = await this.storyPageRepository.findOne({
       where: { id: pageId, storyId },
@@ -731,7 +733,8 @@ constructor(
       });
       const visualStory = await this.toVisualStory(story);
       const visualPages = await this.toVisualPages(story, allPages);
-      const visualPage = visualPages.find((candidate) => candidate.id === page.id) ?? page;
+      const visualPage =
+        visualPages.find((candidate) => candidate.id === page.id) ?? page;
       const prompt = this.scenePromptService.buildImagePrompt(
         visualStory,
         visualPage,
@@ -805,7 +808,11 @@ constructor(
     }
 
     this.validateStoryReady(story);
-    await this.assertDailyImageAllowance(story.user?.role ?? UserRole.USER, story.userId, 1);
+    await this.assertDailyImageAllowance(
+      story.user?.role ?? UserRole.USER,
+      story.userId,
+      1,
+    );
 
     if (this.isRequeueableBlocked(story.coverImageStatus)) {
       throw new BadRequestException(
@@ -915,11 +922,12 @@ constructor(
 
   private async toVisualStory(story: Story): Promise<Story> {
     const visualStory = Object.assign(new Story(), story);
-    visualStory.originalText = await this.storyTranslationService.translateForVisual(
-      story.originalText ?? '',
-      story.language,
-      `story:${story.id}`,
-    );
+    visualStory.originalText =
+      await this.storyTranslationService.translateForVisual(
+        story.originalText ?? '',
+        story.language,
+        `story:${story.id}`,
+      );
 
     const names = await this.storyOptionsService.resolveNames(
       story.genreId,

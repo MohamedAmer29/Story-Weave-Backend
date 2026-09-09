@@ -52,19 +52,19 @@ describe('AIController', () => {
       const oldLimit = process.env.AI_DAILY_NEURON_LIMIT;
       const oldSafe = process.env.AI_NEURON_SAFETY_LIMIT;
       process.env.AI_DAILY_NEURON_LIMIT = '10000';
-      process.env.AI_NEURON_SAFETY_LIMIT = '9500';
+      process.env.AI_NEURON_SAFETY_LIMIT = '8700';
       usageService.getUsageStatus.mockResolvedValue({
         used: 100,
-        remaining: 9400,
+        remaining: 8600,
         percentage: 1.05,
         blocked: false,
         date: '2026-01-01',
-        limit: 9500,
+        limit: 8700,
       });
       const result = await controller.getUsage();
       expect(result.success).toBe(true);
       expect(result.data.dailyLimit).toBe(10000);
-      expect(result.data.safetyLimit).toBe(9500);
+      expect(result.data.safetyLimit).toBe(8700);
       expect(result.data.used).toBe(100);
       if (oldLimit === undefined) delete process.env.AI_DAILY_NEURON_LIMIT;
       else process.env.AI_DAILY_NEURON_LIMIT = oldLimit;
@@ -79,13 +79,13 @@ describe('AIController', () => {
       usageService.getUsageStatus.mockResolvedValue({
         blocked: false,
         used: 100,
-        limit: 9500,
-        remaining: 9400,
+        limit: 8700,
+        remaining: 8600,
       });
       const result = await controller.getUsageStatus();
       expect(result.allowed).toBe(true);
       expect(result.used).toBe(100);
-      expect(result.limit).toBe(9500);
+      expect(result.limit).toBe(8700);
     });
   });
 });

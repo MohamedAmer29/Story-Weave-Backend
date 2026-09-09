@@ -32,6 +32,7 @@ import { AuditLog } from './admin/entities/audit-log.entity';
 import { StoryGenre } from './database/entities/story-genre.entity';
 import { StoryEraOption } from './database/entities/story-era.entity';
 import { StoryCivilizationOption } from './database/entities/story-civilization.entity';
+import { StoryFavorite } from './database/entities/story-favorite.entity';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -102,6 +103,7 @@ import { StoryOptionsModule } from './modules/story-options/story-options.module
             StoryGenre,
             StoryEraOption,
             StoryCivilizationOption,
+            StoryFavorite,
           ],
           synchronize: configService.get<boolean>(
             'database.synchronize',

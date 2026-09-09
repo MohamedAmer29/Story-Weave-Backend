@@ -105,10 +105,25 @@ export class StoryDetailsResponseDto {
   storyType?: StoryType | null;
 
   @ApiPropertyOptional()
+  genreId?: string | null;
+
+  @ApiPropertyOptional()
+  genreName?: string | null;
+
+  @ApiPropertyOptional()
+  visualStyle?: string | null;
+
+  @ApiPropertyOptional()
   language?: string | null;
 
   @ApiPropertyOptional({ enum: StoryEra })
   era?: StoryEra | null;
+
+  @ApiPropertyOptional()
+  eraId?: string | null;
+
+  @ApiPropertyOptional()
+  eraName?: string | null;
 
   @ApiPropertyOptional()
   year?: number | null;
@@ -118,6 +133,12 @@ export class StoryDetailsResponseDto {
 
   @ApiPropertyOptional({ enum: StoryCivilization })
   civilization?: StoryCivilization | null;
+
+  @ApiPropertyOptional()
+  civilizationId?: string | null;
+
+  @ApiPropertyOptional()
+  civilizationName?: string | null;
 
   @ApiPropertyOptional()
   customCivilization?: string | null;

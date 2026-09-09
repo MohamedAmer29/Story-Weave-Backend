@@ -7,6 +7,8 @@ import { AiUsageLimitExceededException } from '../../ai/ai-usage-limit-exception
 import { AI_MODEL_USAGE } from '../../ai/config/ai-model-usage.config';
 
 const MODEL_KEY_MAP: Record<string, string> = {
+  '@cf/black-forest-labs/flux-2-klein-9b':
+    '@cf/black-forest-labs/flux-2-klein-9b',
   '@cf/black-forest-labs/flux-1-schnell':
     '@cf/black-forest-labs/flux-1-schnell',
 };

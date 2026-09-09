@@ -9,6 +9,7 @@ import { StoryStatus } from '../../../common/enums/story-status.enum';
 import { SourceType } from '../../../common/enums/source-type.enum';
 import { IllustrationPageStatus } from '../../../illustration/enums/illustration-page-status.enum';
 import { PublicCacheService } from '../../../common/services/public-cache.service';
+import { StoryFavorite } from '../../../database/entities/story-favorite.entity';
 import { StoryLibraryService } from './story-library.service';
 
 describe('StoryLibraryService', () => {
@@ -20,11 +21,15 @@ describe('StoryLibraryService', () => {
   let pageRepo: {
     createQueryBuilder: jest.Mock;
   };
+  let favoriteRepo: {
+    createQueryBuilder: jest.Mock;
+  };
   let cache: { get: jest.Mock; set: jest.Mock };
   let userRepo: { find: jest.Mock };
 
   let qb: any;
   let pageQb: any;
+  let favoriteQb: any;
 
   function makeQb(terminal: Record<string, unknown>): any {
     return {
@@ -67,11 +72,15 @@ describe('StoryLibraryService', () => {
   beforeEach(async () => {
     qb = makeQb({});
     pageQb = makeQb({});
+    favoriteQb = makeQb({});
     storyRepo = {
       createQueryBuilder: jest.fn().mockReturnValue(qb),
       findOne: jest.fn(),
     };
     pageRepo = { createQueryBuilder: jest.fn().mockReturnValue(pageQb) };
+    favoriteRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(favoriteQb),
+    };
     cache = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -84,6 +93,7 @@ describe('StoryLibraryService', () => {
         { provide: getRepositoryToken(Story), useValue: storyRepo },
         { provide: getRepositoryToken(StoryPage), useValue: pageRepo },
         { provide: getRepositoryToken(StoryShare), useValue: {} },
+        { provide: getRepositoryToken(StoryFavorite), useValue: favoriteRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: PublicCacheService, useValue: cache },
       ],
@@ -222,6 +232,78 @@ describe('StoryLibraryService', () => {
 
       expect(result.meta.total).toBe(0);
       expect(qb.getManyAndCount).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findFavorites', () => {
+    it('returns stories in favorite order and paginates', async () => {
+      const favorite = new StoryFavorite();
+      Object.assign(favorite, {
+        storyId: 's-2',
+        createdAt: new Date('2026-02-01T00:00:00Z'),
+      });
+      favoriteQb.getManyAndCount.mockResolvedValue([[favorite], 1]);
+
+      const story = makeStory({ id: 's-2' });
+      qb.getMany.mockResolvedValueOnce([story]);
+      pageQb.getRawMany.mockResolvedValueOnce([]);
+
+      const result = await service.findFavorites('u-1', {
+        page: 1,
+        limit: 10,
+      });
+
+      expect(favoriteQb.where).toHaveBeenCalledWith(
+        'favorite.userId = :userId',
+        { userId: 'u-1' },
+      );
+      expect(favoriteQb.orderBy).toHaveBeenCalledWith(
+        'favorite.createdAt',
+        'DESC',
+      );
+      expect(qb.where).toHaveBeenCalledWith('story.id IN (:...storyIds)', {
+        storyIds: ['s-2'],
+      });
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+      });
+      expect(result.data[0].id).toBe('s-2');
+    });
+
+    it('returns empty result when there are no favorites', async () => {
+      favoriteQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      const result = await service.findFavorites('u-1', {
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.data).toEqual([]);
+      expect(result.meta.total).toBe(0);
+      expect(qb.getMany).not.toHaveBeenCalled();
+    });
+
+    it('filters by search across story title and description', async () => {
+      favoriteQb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findFavorites('u-1', {
+        page: 1,
+        limit: 10,
+        search: 'forest',
+      });
+
+      expect(favoriteQb.innerJoin).toHaveBeenCalledWith(
+        Story,
+        'story',
+        'story.id = favorite.storyId',
+      );
+      expect(favoriteQb.andWhere).toHaveBeenCalledWith(
+        '(story.title ILIKE :search OR story.description ILIKE :search)',
+        { search: '%forest%' },
+      );
     });
   });
 

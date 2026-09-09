@@ -28,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { StoryService } from './story.service';
 import { StoryLibraryService } from './services/story-library.service';
+import { StoryFavoriteService } from './services/story-favorite.service';
 import { CreateStoryDto } from './dto/create-story.dto';
 import { UpdateStoryDto } from './dto/update-story.dto';
 import { UploadPdfDto } from './dto/upload-pdf.dto';
@@ -39,6 +40,10 @@ import {
   StoryResponseDto,
   PaginatedStoriesResponseDto,
 } from './dto/story-response.dto';
+import {
+  StoryLibraryItemDto,
+  PaginatedLibraryResponseDto,
+} from './dto/story-library-response.dto';
 import { StoryDetailsResponseDto } from './dto/story-details-response.dto';
 import { CivilizationsMetaResponseDto } from './dto/civilizations-meta.dto';
 import { StoryType } from '../../common/enums/story-type.enum';
@@ -75,6 +80,7 @@ export class StoryController {
   constructor(
     private readonly storyService: StoryService,
     private readonly storyLibraryService: StoryLibraryService,
+    private readonly storyFavoriteService: StoryFavoriteService,
   ) {}
 
   @Post()
@@ -123,6 +129,17 @@ export class StoryController {
     @Query() queryDto: StoryQueryDto,
   ): Promise<PaginatedStoriesResponseDto> {
     return this.storyService.findSharedStories(userId, queryDto);
+  }
+
+  @Get('favorites')
+  @ApiOperation({ summary: 'Get stories favorited by current user' })
+  @ApiResponse({ status: 200, type: PaginatedLibraryResponseDto })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async findFavorites(
+    @CurrentUser('id') userId: string,
+    @Query() queryDto: StoryListQueryDto,
+  ): Promise<PaginatedLibraryResponseDto> {
+    return this.storyLibraryService.findFavorites(userId, queryDto);
   }
 
   @Public()
@@ -391,6 +408,45 @@ export class StoryController {
     @Param() params: UuidParamDto,
   ) {
     return this.storyService.listShares(userId, params.id);
+  }
+
+  @Get(':id/favorite')
+  @ApiOperation({ summary: 'Check whether a story is favorited by current user' })
+  @ApiResponse({ status: 200, description: 'Favorite status' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getFavoriteStatus(
+    @CurrentUser('id') userId: string,
+    @Param() params: UuidParamDto,
+  ): Promise<{ favorited: boolean }> {
+    return {
+      favorited: await this.storyFavoriteService.isFavorited(
+        userId,
+        params.id,
+      ),
+    };
+  }
+
+  @Post(':id/favorite')
+  @ApiOperation({ summary: 'Add a story to current user favorites' })
+  @ApiResponse({ status: 201, description: 'Story favorited' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Not Found' })
+  async addFavorite(
+    @CurrentUser('id') userId: string,
+    @Param() params: UuidParamDto,
+  ): Promise<{ favorited: boolean }> {
+    return this.storyFavoriteService.add(userId, params.id);
+  }
+
+  @Delete(':id/favorite')
+  @ApiOperation({ summary: 'Remove a story from current user favorites' })
+  @ApiResponse({ status: 200, description: 'Favorite removed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async removeFavorite(
+    @CurrentUser('id') userId: string,
+    @Param() params: UuidParamDto,
+  ): Promise<{ favorited: boolean }> {
+    return this.storyFavoriteService.remove(userId, params.id);
   }
 
   @Post('upload-pdf')

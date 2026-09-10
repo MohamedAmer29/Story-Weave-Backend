@@ -108,11 +108,11 @@ describe('UsersController', () => {
     const result = await controller.getPublicStories({ userId: 'u-1' }, {
       page: 1,
       limit: 12,
-    } as any);
+    } as any, undefined);
     expect(result).toEqual({ success: true, data: [], meta: { total: 0 } });
     expect(service.getPublicStories).toHaveBeenCalledWith('u-1', {
       page: 1,
       limit: 12,
-    });
+    }, undefined);
   });
 });

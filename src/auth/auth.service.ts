@@ -125,19 +125,22 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
     rememberMe = false,
+    expiresAtOverride?: Date,
   ): Promise<{ token: string; refreshToken: RefreshToken }> {
     const rawToken = this.generateRefreshToken();
     const tokenHash = this.hashToken(rawToken);
-    const days = rememberMe
-      ? this.refreshRememberMeDays
-      : this.refreshExpiresInDays;
+    const expiresAt = expiresAtOverride
+      ? expiresAtOverride
+      : rememberMe
+        ? this.getExpirationDate(this.refreshRememberMeDays)
+        : new Date(Date.now() + this.accessTokenTtlMs);
 
     const refreshToken = this.refreshTokenRepository.create({
       userId,
       token: tokenHash,
       ipAddress,
       userAgent,
-      expiresAt: this.getExpirationDate(days),
+      expiresAt,
     });
 
     const saved = await this.refreshTokenRepository.save(refreshToken);
@@ -219,6 +222,7 @@ export class AuthService {
       user: this.sanitizeUser(savedUser),
       accessToken,
       refreshToken,
+      sessionExpiresAt: savedRefreshToken.expiresAt.getTime(),
     };
   }
 
@@ -229,6 +233,7 @@ export class AuthService {
       user: User;
       accessToken: string;
       refreshToken: string;
+      sessionExpiresAt: number;
     };
     try {
       result = await this.loginInternal(
@@ -261,6 +266,7 @@ export class AuthService {
       user: this.sanitizeUser(result.user),
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
+      sessionExpiresAt: result.sessionExpiresAt,
     };
   }
 
@@ -270,7 +276,12 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
     rememberMe = false,
-  ): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+  ): Promise<{
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+    sessionExpiresAt: number;
+  }> {
     const user = await this.userRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
@@ -308,7 +319,12 @@ export class AuthService {
       userAgent,
     });
 
-    return { user, accessToken, refreshToken };
+    return {
+      user,
+      accessToken,
+      refreshToken,
+      sessionExpiresAt: savedRefreshToken.expiresAt.getTime(),
+    };
   }
 
   async refreshTokens(
@@ -346,13 +362,20 @@ export class AuthService {
     });
 
     const { token: newRefreshToken, refreshToken: savedRefreshToken } =
-      await this.createRefreshToken(user.id, ipAddress, userAgent);
+      await this.createRefreshToken(
+        user.id,
+        ipAddress,
+        userAgent,
+        false,
+        refreshToken.expiresAt,
+      );
 
     const accessToken = await this.signAccessToken(user, savedRefreshToken.id);
 
     return {
       accessToken,
       refreshToken: newRefreshToken,
+      sessionExpiresAt: savedRefreshToken.expiresAt.getTime(),
     };
   }
 
@@ -618,6 +641,7 @@ export class AuthService {
       user: this.sanitizeUser(user),
       accessToken,
       refreshToken,
+      sessionExpiresAt: savedRefreshToken.expiresAt.getTime(),
     };
   }
 

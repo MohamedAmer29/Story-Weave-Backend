@@ -43,6 +43,7 @@ describe('Reader API E2E', () => {
     it('returns story metadata', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty('id');
@@ -63,6 +64,7 @@ describe('Reader API E2E', () => {
     it('returns author information', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body.author).toHaveProperty('id');
@@ -73,6 +75,7 @@ describe('Reader API E2E', () => {
     it('returns generation status stats', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body.stats).toHaveProperty('totalPages');
@@ -85,6 +88,7 @@ describe('Reader API E2E', () => {
     it('returns pages in correct order', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       const pages = res.body.pages;
@@ -96,6 +100,7 @@ describe('Reader API E2E', () => {
     it('returns page content', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body.pages.length).toBeGreaterThan(0);
@@ -112,6 +117,7 @@ describe('Reader API E2E', () => {
     it('does not expose sensitive internal fields', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body).not.toHaveProperty('originalText');
@@ -127,6 +133,7 @@ describe('Reader API E2E', () => {
     it('returns cover information', async () => {
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body.cover).toHaveProperty('imageUrl');
@@ -136,6 +143,7 @@ describe('Reader API E2E', () => {
     it('returns 404 for non-existent story', async () => {
       await request(app.getHttpServer())
         .get('/api/stories/non-existent-id')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(404);
     });
 
@@ -223,17 +231,7 @@ describe('Reader API E2E', () => {
     });
 
     describe('GET /api/stories/public', () => {
-      it('returns public stories without authentication', async () => {
-        const res = await request(app.getHttpServer())
-          .get('/api/stories/public')
-          .expect(200);
-
-        expect(res.body).toHaveProperty('data');
-        expect(res.body).toHaveProperty('meta');
-        expect(Array.isArray(res.body.data)).toBe(true);
-      });
-
-      it('only returns PUBLIC stories', async () => {
+      it('allows guests to list public stories (PUBLIC only)', async () => {
         const res = await request(app.getHttpServer())
           .get('/api/stories/public')
           .expect(200);
@@ -243,9 +241,21 @@ describe('Reader API E2E', () => {
         });
       });
 
+      it('only returns PUBLIC or MEMBERS stories for authenticated users', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/api/stories/public')
+          .set('Authorization', `Bearer ${authToken}`)
+          .expect(200);
+
+        res.body.data.forEach((story: any) => {
+          expect(['PUBLIC', 'MEMBERS']).toContain(story.visibility);
+        });
+      });
+
       it('supports pagination', async () => {
         const res = await request(app.getHttpServer())
           .get('/api/stories/public?page=1&limit=10')
+          .set('Authorization', `Bearer ${authToken}`)
           .expect(200);
 
         expect(res.body.meta.page).toBe(1);
@@ -277,6 +287,7 @@ describe('Reader API E2E', () => {
       // For now, we verify the structure handles failed pages
       const res = await request(app.getHttpServer())
         .get(`/api/stories/${storyId}`)
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
       expect(res.body.stats).toHaveProperty('failedPages');

@@ -95,12 +95,21 @@ export class StoryLibraryService {
   async findPublic(
     filters: StoryListFilters,
     authorId?: string,
+    viewerId?: string,
   ): Promise<PaginatedLibraryResponseDto> {
-    const cacheKey = `${authorId ?? 'all'}|${filters.page}|${filters.limit}|${
-      filters.search ?? ''
-    }|${filters.sort ?? DEFAULT_SORT}|${filters.sourceType ?? ''}|${
-      filters.storyType ?? ''
-    }`;
+    // Guests see PUBLIC stories only; authenticated members also see MEMBERS.
+    // The viewer scope is part of the cache key so member-only results never
+    // leak to guests through the shared public cache.
+    const scope = viewerId ? 'members' : 'public';
+    const visibleVisibilities = viewerId
+      ? [StoryVisibility.PUBLIC, StoryVisibility.MEMBERS]
+      : [StoryVisibility.PUBLIC];
+
+    const cacheKey = `${scope}|${authorId ?? 'all'}|${filters.page}|${
+      filters.limit
+    }|${filters.search ?? ''}|${filters.sort ?? DEFAULT_SORT}|${
+      filters.sourceType ?? ''
+    }|${filters.storyType ?? ''}`;
 
     const cached =
       await this.publicCacheService.get<PaginatedLibraryResponseDto>(
@@ -113,7 +122,9 @@ export class StoryLibraryService {
 
     const qb = this.storyRepository
       .createQueryBuilder('story')
-      .where('story.visibility = :vis', { vis: StoryVisibility.PUBLIC });
+      .where('story.visibility IN (:...visibleVisibilities)', {
+        visibleVisibilities,
+      });
 
     if (authorId) {
       qb.andWhere('story.userId = :authorId', { authorId });

@@ -26,6 +26,7 @@ import { StoryOptions1750000000003 } from './migrations/1750000000003-story-opti
 import { SeedCivilizationsCatalog1750000000004 } from './migrations/1750000000004-seed-civilizations-catalog';
 import { AddFourthAgeMiddleEarthEra1750000000005 } from './migrations/1750000000005-add-fourth-age-middle-earth-era';
 import { AddStoryFavorites1750000000006 } from './migrations/1750000000006-add-story-favorites';
+import { AddMembersVisibility1750000000007 } from './migrations/1750000000007-add-members-visibility';
 import { StoryFavorite } from './entities/story-favorite.entity';
 
 const sslEnabled = process.env.DATABASE_SSL === 'true';
@@ -72,6 +73,7 @@ export default new DataSource({
     SeedCivilizationsCatalog1750000000004,
     AddFourthAgeMiddleEarthEra1750000000005,
     AddStoryFavorites1750000000006,
+    AddMembersVisibility1750000000007,
   ],
   synchronize: false,
   logging: false,

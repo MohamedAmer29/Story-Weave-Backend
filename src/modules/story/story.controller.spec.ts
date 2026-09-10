@@ -93,19 +93,35 @@ describe('StoryController', () => {
   });
 
   describe('public endpoints', () => {
-    it('listPublicStories returns wrapped library result', async () => {
+    it('listPublicStories returns wrapped library result for guests', async () => {
       libraryService.findPublic.mockResolvedValue({ data: [], meta: {} });
-      const result = await controller.listPublicStories({ page: 1 } as any);
-      expect(libraryService.findPublic).toHaveBeenCalledWith({ page: 1 });
+      const result = await controller.listPublicStories({ page: 1 } as any, undefined);
+      expect(libraryService.findPublic).toHaveBeenCalledWith(
+        { page: 1 },
+        undefined,
+        undefined,
+      );
       expect(result).toEqual({ success: true, data: [], meta: {} });
+    });
+
+    it('listPublicStories forwards the viewer id when authenticated', async () => {
+      libraryService.findPublic.mockResolvedValue({ data: [], meta: {} });
+      await controller.listPublicStories({ page: 1 } as any, 'u-viewer');
+      expect(libraryService.findPublic).toHaveBeenCalledWith(
+        { page: 1 },
+        undefined,
+        'u-viewer',
+      );
     });
 
     it('searchPublicStories forwards search query', async () => {
       libraryService.findPublic.mockResolvedValue({ data: [] });
-      await controller.searchPublicStories({ search: 'dragon' } as any);
-      expect(libraryService.findPublic).toHaveBeenCalledWith({
-        search: 'dragon',
-      });
+      await controller.searchPublicStories({ search: 'dragon' } as any, undefined);
+      expect(libraryService.findPublic).toHaveBeenCalledWith(
+        { search: 'dragon' },
+        undefined,
+        undefined,
+      );
     });
   });
 
@@ -117,7 +133,7 @@ describe('StoryController', () => {
       expect(result).toEqual({ id: 's1' });
     });
 
-    it('allows an anonymous (undefined) viewer for public stories', async () => {
+    it('allows anonymous reads by passing an undefined user id', async () => {
       storyService.findOne.mockResolvedValue({
         id: 's1',
         visibility: 'PUBLIC',

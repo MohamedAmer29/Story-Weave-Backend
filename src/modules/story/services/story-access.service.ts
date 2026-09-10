@@ -30,7 +30,8 @@ export class StoryAccessService {
       throw new NotFoundException('Story not found');
     }
 
-    // Guest access (no userId)
+    // Guests can only read PUBLIC stories; members-only and restricted
+    // stories require a session.
     if (!userId) {
       return {
         story,
@@ -45,7 +46,10 @@ export class StoryAccessService {
 
     // Check visibility
     switch (story.visibility) {
+      // PUBLIC = everyone (including unauthenticated guests);
+      // MEMBERS = any authenticated user.
       case StoryVisibility.PUBLIC:
+      case StoryVisibility.MEMBERS:
         return { story, canAccess: true };
 
       case StoryVisibility.PRIVATE:

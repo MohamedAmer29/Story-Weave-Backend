@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -24,6 +25,7 @@ import type { Express, Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { UuidParamDto, UserIdParamDto } from '../common/dto/uuid-param.dto';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -155,17 +157,24 @@ export class UsersController {
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':userId/public-stories')
-  @ApiOperation({ summary: 'Get public stories from a specific author' })
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Get public stories from a specific author (guests see PUBLIC; authenticated users also see MEMBERS)',
+  })
   @ApiResponse({ status: 200, description: 'Paginated public stories' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async getPublicStories(
     @Param() params: UserIdParamDto,
     @Query() query: StoryListQueryDto,
+    @CurrentUser('id') viewerId?: string,
   ) {
     const result = await this.usersService.getPublicStories(
       params.userId,
       query,
+      viewerId,
     );
     return { success: true, ...result };
   }

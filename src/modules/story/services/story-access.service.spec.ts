@@ -29,18 +29,26 @@ describe('StoryAccessService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('grants guest access only for PUBLIC stories', async () => {
+    it('grants guests access to PUBLIC stories', async () => {
       storyRepo.findOne.mockResolvedValue(
         makeStory({ visibility: StoryVisibility.PUBLIC }),
       );
       const { canAccess } = await service.canAccessStory('story-1');
       expect(canAccess).toBe(true);
+    });
 
-      storyRepo.findOne.mockResolvedValue(
-        makeStory({ visibility: StoryVisibility.PRIVATE }),
-      );
-      const denied = await service.canAccessStory('story-1');
-      expect(denied.canAccess).toBe(false);
+    it('denies guests access to MEMBERS, PRIVATE and SHARED stories', async () => {
+      for (const visibility of [
+        StoryVisibility.MEMBERS,
+        StoryVisibility.PRIVATE,
+        StoryVisibility.SHARED,
+      ]) {
+        storyRepo.findOne.mockResolvedValue(
+          makeStory({ visibility: visibility as any }),
+        );
+        const denied = await service.canAccessStory('story-1');
+        expect(denied.canAccess).toBe(false);
+      }
     });
 
     it('always grants the owner access', async () => {
@@ -54,6 +62,14 @@ describe('StoryAccessService', () => {
     it('grants access to PUBLIC for any authenticated user', async () => {
       storyRepo.findOne.mockResolvedValue(
         makeStory({ visibility: StoryVisibility.PUBLIC }),
+      );
+      const { canAccess } = await service.canAccessStory('story-1', 'stranger');
+      expect(canAccess).toBe(true);
+    });
+
+    it('grants access to MEMBERS for any authenticated user', async () => {
+      storyRepo.findOne.mockResolvedValue(
+        makeStory({ visibility: StoryVisibility.MEMBERS }),
       );
       const { canAccess } = await service.canAccessStory('story-1', 'stranger');
       expect(canAccess).toBe(true);
@@ -88,11 +104,11 @@ describe('StoryAccessService', () => {
   });
 
   describe('requireAccess', () => {
-    it('returns the story when access allowed', async () => {
+    it('returns the story when an authenticated user has access', async () => {
       storyRepo.findOne.mockResolvedValue(
         makeStory({ visibility: StoryVisibility.PUBLIC }),
       );
-      const story = await service.requireAccess('story-1');
+      const story = await service.requireAccess('story-1', 'u1');
       expect(story.id).toBe('story-1');
     });
 
@@ -102,6 +118,23 @@ describe('StoryAccessService', () => {
       );
       await expect(
         service.requireAccess('story-1', 'stranger'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('returns a PUBLIC story for a guest', async () => {
+      storyRepo.findOne.mockResolvedValue(
+        makeStory({ visibility: StoryVisibility.PUBLIC }),
+      );
+      const story = await service.requireAccess('story-1');
+      expect(story.id).toBe('story-1');
+    });
+
+    it('throws ForbiddenException for guests on non-PUBLIC stories', async () => {
+      storyRepo.findOne.mockResolvedValue(
+        makeStory({ visibility: StoryVisibility.MEMBERS }),
+      );
+      await expect(
+        service.requireAccess('story-1'),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });

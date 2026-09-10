@@ -199,15 +199,19 @@ export class StoryService {
 
     // Access check via EXISTS avoids joining the shares table, which would
     // multiply story rows (and inflate both the count and the result set).
-    // PRIVATE stories are owner-only (matching canAccessStory); SHARED stories
-    // are accessible to explicitly granted users via story_shares.
+    // PRIVATE stories are owner-only (matching canAccessStory); PUBLIC and
+    // MEMBERS are readable by any authenticated user; SHARED stories are
+    // accessible to explicitly granted users via story_shares.
     const queryBuilder = this.storyRepository
       .createQueryBuilder('story')
       .where(
-        '(story.userId = :userId OR story.visibility = :public OR (story.visibility = :shared AND EXISTS (SELECT 1 FROM story_shares ss WHERE ss."storyId" = story."id" AND ss."userId" = :userId)))',
+        '(story.userId = :userId OR story.visibility IN (:...sharedVisibilities) OR (story.visibility = :shared AND EXISTS (SELECT 1 FROM story_shares ss WHERE ss."storyId" = story."id" AND ss."userId" = :userId)))',
         {
           userId,
-          public: StoryVisibility.PUBLIC,
+          sharedVisibilities: [
+            StoryVisibility.PUBLIC,
+            StoryVisibility.MEMBERS,
+          ],
           shared: StoryVisibility.SHARED,
         },
       );
@@ -407,7 +411,8 @@ export class StoryService {
   ): Promise<StoryDetailsResponseDto> {
     this.logger.log(`Finding story: ${id}`);
 
-    // Enforces PUBLIC / PRIVATE (owner) / SHARED (explicit grant) access rules.
+    // Enforces PUBLIC (guests) / MEMBERS (any authenticated user) / PRIVATE
+    // (owner) / SHARED (explicit grant) access rules.
     const story = await this.storyAccessService.requireAccess(id, userId);
 
     // Fetch pages with ordering using the new composite index

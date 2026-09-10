@@ -30,6 +30,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { getClientIp } from '../common/utils/ip.util';
 import { Public } from '../common/decorators/public.decorator';
+import { SkipEmailVerification } from '../common/decorators/skip-email-verification.decorator';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
 import { SessionIdParamDto } from '../common/dto/uuid-param.dto';
 import type { CookieOptions } from 'express';
@@ -58,22 +59,15 @@ export class AuthController {
     };
   }
 
-  private buildCookieOptions(rememberMe: boolean): CookieOptions {
-    const days = rememberMe
-      ? this.configService.get<number>('auth.refreshRememberMeDays', 30)
-      : this.configService.get<number>('auth.refreshExpiresInDays', 7);
-    return {
-      ...this.baseCookieOptions(),
-      maxAge: days * 24 * 60 * 60 * 1000,
-    };
-  }
-
   private setRefreshCookie(
     res: Response,
     token: string,
-    rememberMe = false,
+    expiresInMs: number,
   ): void {
-    res.cookie('refresh_token', token, this.buildCookieOptions(rememberMe));
+    res.cookie('refresh_token', token, {
+      ...this.baseCookieOptions(),
+      maxAge: Math.max(0, expiresInMs),
+    });
   }
 
   private clearRefreshCookie(res: Response): void {
@@ -104,7 +98,11 @@ export class AuthController {
       req.headers['user-agent'],
     );
 
-    this.setRefreshCookie(res, result.refreshToken, false);
+    this.setRefreshCookie(
+      res,
+      result.refreshToken,
+      result.sessionExpiresAt - Date.now(),
+    );
 
     return {
       user: result.user,
@@ -132,7 +130,11 @@ export class AuthController {
       req.headers['user-agent'],
     );
 
-    this.setRefreshCookie(res, result.refreshToken, dto.rememberMe);
+    this.setRefreshCookie(
+      res,
+      result.refreshToken,
+      result.sessionExpiresAt - Date.now(),
+    );
 
     return {
       user: result.user,
@@ -159,13 +161,18 @@ export class AuthController {
       req.headers['user-agent'],
     );
 
-    this.setRefreshCookie(res, result.refreshToken, false);
+    this.setRefreshCookie(
+      res,
+      result.refreshToken,
+      result.sessionExpiresAt - Date.now(),
+    );
 
     return { accessToken: result.accessToken };
   }
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
+  @SkipEmailVerification()
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout current session' })
@@ -189,6 +196,7 @@ export class AuthController {
 
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
+  @SkipEmailVerification()
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout all sessions' })
@@ -236,7 +244,11 @@ export class AuthController {
       req.headers['user-agent'],
     );
 
-    this.setRefreshCookie(res, result.refreshToken, false);
+    this.setRefreshCookie(
+      res,
+      result.refreshToken,
+      result.sessionExpiresAt - Date.now(),
+    );
 
     return {
       message: result.message,

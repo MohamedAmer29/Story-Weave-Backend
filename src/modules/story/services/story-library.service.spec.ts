@@ -192,7 +192,7 @@ describe('StoryLibraryService', () => {
   });
 
   describe('findPublic', () => {
-    it('only queries PUBLIC stories and stores cache', async () => {
+    it('queries only PUBLIC stories for guests and stores cache', async () => {
       const story = makeStory();
       qb.getManyAndCount.mockResolvedValue([[story], 1]);
 
@@ -202,11 +202,28 @@ describe('StoryLibraryService', () => {
         search: 'magic',
       });
 
-      expect(qb.where).toHaveBeenCalledWith('story.visibility = :vis', {
-        vis: StoryVisibility.PUBLIC,
-      });
+      expect(qb.where).toHaveBeenCalledWith(
+        'story.visibility IN (:...visibleVisibilities)',
+        { visibleVisibilities: [StoryVisibility.PUBLIC] },
+      );
       expect(result.data[0].id).toBe('s-1');
       expect(cache.set).toHaveBeenCalled();
+    });
+
+    it('queries PUBLIC + MEMBERS for authenticated viewers', async () => {
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ page: 1, limit: 10 }, undefined, 'u-viewer');
+
+      expect(qb.where).toHaveBeenCalledWith(
+        'story.visibility IN (:...visibleVisibilities)',
+        {
+          visibleVisibilities: [
+            StoryVisibility.PUBLIC,
+            StoryVisibility.MEMBERS,
+          ],
+        },
+      );
     });
 
     it('filters by author when authorId provided and does not filter private stories', async () => {
@@ -214,12 +231,25 @@ describe('StoryLibraryService', () => {
 
       await service.findPublic({ page: 1, limit: 10 }, 'u-author');
 
-      expect(qb.where).toHaveBeenCalledWith('story.visibility = :vis', {
-        vis: StoryVisibility.PUBLIC,
-      });
+      expect(qb.where).toHaveBeenCalledWith(
+        'story.visibility IN (:...visibleVisibilities)',
+        { visibleVisibilities: [StoryVisibility.PUBLIC] },
+      );
       expect(qb.andWhere).toHaveBeenCalledWith('story.userId = :authorId', {
         authorId: 'u-author',
       });
+    });
+
+    it('scopes the cache key by viewer (members vs guests)', async () => {
+      cache.get.mockResolvedValueOnce(null);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.findPublic({ page: 1, limit: 10 }, undefined, 'u-viewer');
+
+      expect(cache.get).toHaveBeenCalledWith(
+        'public-stories',
+        expect.stringContaining('members|all|1|10||'),
+      );
     });
 
     it('returns cached response without hitting the database', async () => {

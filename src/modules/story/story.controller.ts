@@ -61,6 +61,8 @@ import {
   UuidTargetUserIdParamDto,
 } from '../../common/dto/uuid-param.dto';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../database/entities/user.entity';
 import { StoryPageIdParamDto } from '../../common/dto/uuid-param.dto';
 import {
   AppendStoryDto,
@@ -84,6 +86,7 @@ export class StoryController {
   ) {}
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @RateLimit({ ttl: 300, limit: 30 })
   @ApiOperation({ summary: 'Create a new story' })
   @ApiResponse({ status: 201, type: StoryResponseDto })
@@ -143,29 +146,47 @@ export class StoryController {
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('public')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'List public stories (no authentication required)',
+    summary:
+      'List public stories (guests see PUBLIC; authenticated users also see MEMBERS)',
   })
   @ApiResponse({ status: 200, description: 'Paginated public stories' })
-  async listPublicStories(@Query() query: StoryListQueryDto) {
-    const result = await this.storyLibraryService.findPublic(query);
+  async listPublicStories(
+    @Query() query: StoryListQueryDto,
+    @CurrentUser('id') userId?: string,
+  ) {
+    const result = await this.storyLibraryService.findPublic(
+      query,
+      undefined,
+      userId,
+    );
     return { success: true, ...result };
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('public/search')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Search public stories by title or description (public)',
+    summary:
+      'Search public stories by title or description (guests see PUBLIC, authenticated users also see MEMBERS)',
   })
   @ApiResponse({ status: 200, description: 'Paginated public stories' })
-  async searchPublicStories(@Query() query: StoryListQueryDto) {
-    const result = await this.storyLibraryService.findPublic({
-      ...query,
-      search: query.search || '',
-    });
+  async searchPublicStories(
+    @Query() query: StoryListQueryDto,
+    @CurrentUser('id') userId?: string,
+  ) {
+    const result = await this.storyLibraryService.findPublic(
+      {
+        ...query,
+        search: query.search || '',
+      },
+      undefined,
+      userId,
+    );
     return { success: true, ...result };
   }
 
@@ -205,13 +226,14 @@ export class StoryController {
   }
 
   @Public()
-  @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
+  @Get(':id')
   @ApiOperation({
     summary:
-      'Get a story by ID (guest-accessible for PUBLIC stories; owner/shared access otherwise)',
+      'Get a story by ID (owner, shared user, any authenticated user for PUBLIC/MEMBERS, or guest for PUBLIC)',
   })
   @ApiResponse({ status: 200, type: StoryDetailsResponseDto })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Not Found' })
   async findOne(
@@ -222,6 +244,7 @@ export class StoryController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @ApiOperation({ summary: 'Update a story' })
   @ApiResponse({ status: 200, type: StoryResponseDto })
   @ApiResponse({ status: 400, description: 'Bad Request' })
@@ -237,6 +260,7 @@ export class StoryController {
   }
 
   @Post(':id/append')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @RateLimit({ ttl: 300, limit: 10 })
   @UseInterceptors(
     FileInterceptor('file', {
@@ -290,8 +314,16 @@ export class StoryController {
     return this.storyService.append(userId, params.id, body?.content, file);
   }
 
-  @Get(':storyId/pages')
+  @Public()
   @UseGuards(OptionalJwtAuthGuard)
+  @Get(':storyId/pages')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Get story pages (guests can read PUBLIC stories; authenticated users also read MEMBERS)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated story pages' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
   async getPages(
     @CurrentUser('id') userId: string | undefined,
     @Param('storyId') storyId: string,
@@ -300,6 +332,7 @@ export class StoryController {
   }
 
   @Patch(':storyId/pages/reorder')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   async reorderPages(
     @CurrentUser('id') userId: string,
     @Param('storyId') storyId: string,
@@ -309,6 +342,7 @@ export class StoryController {
   }
 
   @Patch(':storyId/pages/:pageId')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   async updatePage(
     @CurrentUser('id') userId: string,
     @Param() params: StoryPageIdParamDto,
@@ -323,6 +357,7 @@ export class StoryController {
   }
 
   @Delete(':storyId/pages/:pageId')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deletePage(
     @CurrentUser('id') userId: string,
@@ -332,6 +367,7 @@ export class StoryController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a story' })
   @ApiResponse({ status: 204, description: 'No Content' })
@@ -346,6 +382,7 @@ export class StoryController {
   }
 
   @Patch(':id/visibility')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @ApiOperation({ summary: 'Update story visibility' })
   @ApiResponse({ status: 200, type: StoryResponseDto })
   @ApiResponse({ status: 400, description: 'Bad Request' })
@@ -365,6 +402,7 @@ export class StoryController {
   }
 
   @Post(':id/share')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @ApiOperation({ summary: 'Share story with a user' })
   @ApiResponse({ status: 200, description: 'Share created' })
   @ApiResponse({ status: 400, description: 'Bad Request' })
@@ -380,6 +418,7 @@ export class StoryController {
   }
 
   @Delete(':id/share/:targetUserId')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove user access from story' })
   @ApiResponse({ status: 204, description: 'No Content' })
@@ -450,6 +489,7 @@ export class StoryController {
   }
 
   @Post('upload-pdf')
+  @Roles(UserRole.ADMIN, UserRole.AUTHOR)
   @RateLimit({ ttl: 300, limit: 10 })
   @UseInterceptors(
     FileInterceptor('file', {

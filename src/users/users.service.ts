@@ -313,6 +313,7 @@ export class UsersService {
   async getPublicStories(
     userId: string,
     filters: StoryListFilters,
+    viewerId?: string,
   ): Promise<PaginatedLibraryResponseDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -322,7 +323,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    return this.storyLibraryService.findPublic(filters, userId);
+    return this.storyLibraryService.findPublic(filters, userId, viewerId);
   }
 }
 

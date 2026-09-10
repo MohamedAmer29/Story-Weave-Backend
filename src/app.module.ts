@@ -35,6 +35,7 @@ import { StoryCivilizationOption } from './database/entities/story-civilization.
 import { StoryFavorite } from './database/entities/story-favorite.entity';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { EmailVerifiedGuard } from './common/guards/email-verified.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -73,25 +74,25 @@ import { StoryOptionsModule } from './modules/story-options/story-options.module
           idleTimeoutMs: number;
           statementTimeoutMs: number;
         }>('database.pool')!;
-          return {
-            type: 'postgres' as const,
-            url: configService.get<string>('database.url') || undefined,
-            host: configService.get<string>('database.host'),
-            port: configService.get<number>('database.port'),
-            username: configService.get<string>('database.username'),
-            password: configService.get<string>('database.password'),
-            database: configService.get<string>('database.database'),
-            // SSL via DATABASE_URL's query params (e.g. ?sslmode=require) is handled
-            // automatically by the driver. For host/port-based connections, honor
-            // DATABASE_SSL / DATABASE_SSL_REJECT_UNAUTHORIZED explicitly.
-            ssl: configService.get<boolean>('database.ssl', false)
-              ? {
-                  rejectUnauthorized: configService.get<boolean>(
-                    'database.sslRejectUnauthorized',
-                    false,
-                  ),
-                }
-              : undefined,
+        return {
+          type: 'postgres' as const,
+          url: configService.get<string>('database.url') || undefined,
+          host: configService.get<string>('database.host'),
+          port: configService.get<number>('database.port'),
+          username: configService.get<string>('database.username'),
+          password: configService.get<string>('database.password'),
+          database: configService.get<string>('database.database'),
+          // SSL via DATABASE_URL's query params (e.g. ?sslmode=require) is handled
+          // automatically by the driver. For host/port-based connections, honor
+          // DATABASE_SSL / DATABASE_SSL_REJECT_UNAUTHORIZED explicitly.
+          ssl: configService.get<boolean>('database.ssl', false)
+            ? {
+                rejectUnauthorized: configService.get<boolean>(
+                  'database.sslRejectUnauthorized',
+                  false,
+                ),
+              }
+            : undefined,
           entities: [
             User,
             Story,
@@ -137,6 +138,7 @@ import { StoryOptionsModule } from './modules/story-options/story-options.module
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: EmailVerifiedGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },
   ],
   exports: [PassportModule],

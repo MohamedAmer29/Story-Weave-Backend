@@ -11,6 +11,7 @@ describe('Story Visibility E2E', () => {
   let publicStoryId: string;
   let privateStoryId: string;
   let sharedStoryId: string;
+  let membersStoryId: string;
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -73,6 +74,18 @@ describe('Story Visibility E2E', () => {
       });
     sharedStoryId = sharedRes.body.id;
 
+    // Create MEMBERS story
+    const membersRes = await request(app.getHttpServer())
+      .post('/api/stories')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        title: 'Members Story',
+        text: 'This story is for authenticated members only.',
+        storyType: 'FANTASY',
+        visibility: StoryVisibility.MEMBERS,
+      });
+    membersStoryId = membersRes.body.id;
+
     // Share with other user
     await request(app.getHttpServer())
       .post(`/api/stories/${sharedStoryId}/share`)
@@ -98,9 +111,10 @@ describe('Story Visibility E2E', () => {
         .expect(200);
     });
 
-    it('PUBLIC story appears in public library', async () => {
+    it('PUBLIC story appears in public library for authenticated users', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/public')
+        .set('Authorization', `Bearer ${otherUserToken}`)
         .expect(200);
 
       expect(res.body.data).toEqual(
@@ -108,6 +122,16 @@ describe('Story Visibility E2E', () => {
           expect.objectContaining({ id: publicStoryId }),
         ]),
       );
+    });
+
+    it('anonymous user can list public library', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/stories/public')
+        .expect(200);
+
+      res.body.data.forEach((story: any) => {
+        expect(story.visibility).toBe('PUBLIC');
+      });
     });
   });
 
@@ -129,12 +153,13 @@ describe('Story Visibility E2E', () => {
     it('anonymous user cannot read PRIVATE story', async () => {
       await request(app.getHttpServer())
         .get(`/api/stories/${privateStoryId}`)
-        .expect(401);
+        .expect(403);
     });
 
     it('PRIVATE story does not appear in public library', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/public')
+        .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
       expect(res.body.data).not.toEqual(
@@ -163,7 +188,7 @@ describe('Story Visibility E2E', () => {
     it('anonymous user cannot read SHARED story', async () => {
       await request(app.getHttpServer())
         .get(`/api/stories/${sharedStoryId}`)
-        .expect(401);
+        .expect(403);
     });
 
     it('SHARED story appears in shared stories for shared user', async () => {
@@ -182,11 +207,59 @@ describe('Story Visibility E2E', () => {
     it('SHARED story does not appear in public library', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/public')
+        .set('Authorization', `Bearer ${ownerToken}`)
         .expect(200);
 
       expect(res.body.data).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: sharedStoryId }),
+        ]),
+      );
+    });
+  });
+
+  describe('MEMBERS Story Access', () => {
+    it('owner can read MEMBERS story', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/stories/${membersStoryId}`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .expect(200);
+    });
+
+    it('any authenticated user can read MEMBERS story', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/stories/${membersStoryId}`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .expect(200);
+    });
+
+    it('anonymous user cannot read MEMBERS story', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/stories/${membersStoryId}`)
+        .expect(403);
+    });
+
+    it('MEMBERS story appears in public library for authenticated users', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/stories/public')
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .expect(200);
+
+      expect(res.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: membersStoryId }),
+        ]),
+      );
+    });
+
+    it('MEMBERS story does not appear in public library for guests', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/stories/public')
+        .expect(200);
+
+      expect(res.body.data).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: membersStoryId }),
         ]),
       );
     });

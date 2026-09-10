@@ -252,19 +252,16 @@ describe('StoryService', () => {
       expect(result).not.toHaveProperty('originalText');
     });
 
-    it('allows guest access to a PUBLIC story', async () => {
+    it('requires an authenticated user to read any story', async () => {
       accessService.requireAccess.mockResolvedValue(
         makeStory({ visibility: StoryVisibility.PUBLIC }),
       );
       pageRepo.find.mockResolvedValue([]);
       userRepo.findOne.mockResolvedValue(null);
 
-      const result = await service.findOne(undefined, 's-1');
+      const result = await service.findOne('u-1', 's-1');
 
-      expect(accessService.requireAccess).toHaveBeenCalledWith(
-        's-1',
-        undefined,
-      );
+      expect(accessService.requireAccess).toHaveBeenCalledWith('s-1', 'u-1');
       expect(result.author.id).toBe('u-1');
       expect(result.pages).toEqual([]);
     });

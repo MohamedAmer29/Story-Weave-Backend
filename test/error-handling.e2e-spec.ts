@@ -67,6 +67,7 @@ describe('Error Handling and Validation E2E', () => {
     it('returns 404 for not found', async () => {
       await request(app.getHttpServer())
         .get('/api/stories/non-existent-id')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(404);
     });
 
@@ -105,6 +106,7 @@ describe('Error Handling and Validation E2E', () => {
     it('returns consistent error shape', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/non-existent-id')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(404);
 
       expect(res.body).toHaveProperty('statusCode');
@@ -117,6 +119,7 @@ describe('Error Handling and Validation E2E', () => {
     it('does not expose stack trace in production-style responses', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/non-existent-id')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(404);
 
       expect(res.body).not.toHaveProperty('stack');
@@ -152,6 +155,7 @@ describe('Error Handling and Validation E2E', () => {
     it('rejects invalid UUID', async () => {
       await request(app.getHttpServer())
         .get('/api/stories/invalid-uuid')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(400);
     });
 
@@ -262,6 +266,7 @@ describe('Error Handling and Validation E2E', () => {
     it('includes request ID in error response', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/non-existent-id')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(404);
 
       expect(res.body.requestId).toBeDefined();
@@ -272,6 +277,7 @@ describe('Error Handling and Validation E2E', () => {
       const customId = 'custom-request-id-123';
       const res = await request(app.getHttpServer())
         .get('/api/stories/non-existent-id')
+        .set('Authorization', `Bearer ${authToken}`)
         .set('x-request-id', customId)
         .expect(404);
 

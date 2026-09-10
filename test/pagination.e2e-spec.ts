@@ -145,7 +145,18 @@ describe('Pagination E2E', () => {
   });
 
   describe('GET /api/stories/public pagination', () => {
-    it('paginates public stories', async () => {
+    it('paginates public stories for authenticated users', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/stories/public?page=1&limit=5')
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      expect(res.body.meta.page).toBe(1);
+      expect(res.body.meta.limit).toBe(5);
+      expect(res.body.data.length).toBeLessThanOrEqual(5);
+    });
+
+    it('allows anonymous pagination over public stories', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/stories/public?page=1&limit=5')
         .expect(200);
@@ -158,12 +169,14 @@ describe('Pagination E2E', () => {
     it('rejects limit > 100 for public stories', async () => {
       await request(app.getHttpServer())
         .get('/api/stories/public?limit=101')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(400);
     });
 
     it('rejects page=0 for public stories', async () => {
       await request(app.getHttpServer())
         .get('/api/stories/public?page=0')
+        .set('Authorization', `Bearer ${authToken}`)
         .expect(400);
     });
   });

@@ -346,6 +346,20 @@ describe('UsersService', () => {
       expect(library.findPublic).toHaveBeenCalledWith(
         { page: 1, limit: 10 },
         'u-1',
+        undefined,
+      );
+    });
+
+    it('scopes an authors story list to member visibility for authenticated viewers', async () => {
+      userRepo.findOne.mockResolvedValue(makeUser({ isActive: true }));
+      library.findPublic.mockResolvedValue({ data: [], meta: {} });
+
+      await service.getPublicStories('u-1', { page: 1, limit: 10 }, 'u-viewer');
+
+      expect(library.findPublic).toHaveBeenCalledWith(
+        { page: 1, limit: 10 },
+        'u-1',
+        'u-viewer',
       );
     });
 

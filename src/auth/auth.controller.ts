@@ -136,6 +136,7 @@ export class AuthController {
     return {
       user: result.user,
       accessToken: result.accessToken,
+      sessionExpiresAt: result.sessionExpiresAt,
     };
   }
 
@@ -169,6 +170,7 @@ export class AuthController {
     return {
       user: result.user,
       accessToken: result.accessToken,
+      sessionExpiresAt: result.sessionExpiresAt,
     };
   }
 
@@ -198,7 +200,10 @@ export class AuthController {
       req,
     );
 
-    return { accessToken: result.accessToken };
+    return {
+      accessToken: result.accessToken,
+      sessionExpiresAt: result.sessionExpiresAt,
+    };
   }
 
   @Post('logout')
@@ -286,6 +291,7 @@ export class AuthController {
       message: result.message,
       user: result.user,
       accessToken: result.accessToken,
+      sessionExpiresAt: result.sessionExpiresAt,
     };
   }
 

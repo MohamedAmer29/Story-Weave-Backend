@@ -50,11 +50,38 @@ export class AuthController {
     );
   }
 
-  private baseCookieOptions(): CookieOptions {
+  private cookieSecure(req?: Request): boolean {
+    const explicit = this.configService.get<boolean | undefined>(
+      'app.cookieSecure',
+    );
+    if (explicit !== undefined) return explicit;
+    // In production the connection may be terminated by a TLS reverse proxy
+    // (TRUST_PROXY=true is the production default), so honor the real
+    // protocol instead of assuming: Secure cookies over plain HTTP are
+    // silently dropped by browsers, which logs users out on every refresh.
+    if (!this.isProduction()) return false;
+    return req ? req.secure : false;
+  }
+
+  private cookieSameSite(req?: Request): 'strict' | 'lax' | 'none' {
+    const configured = this.configService.get<string>(
+      'app.cookieSameSite',
+      'strict',
+    );
+    const sameSite = (
+      ['strict', 'lax', 'none'].includes(configured) ? configured : 'strict'
+    ) as 'strict' | 'lax' | 'none';
+    // Browsers reject SameSite=None cookies that are not Secure. Fall back to
+    // 'lax' so the cookie is still accepted on plain-HTTP deployments/setups.
+    if (sameSite === 'none' && !this.cookieSecure(req)) return 'lax';
+    return sameSite;
+  }
+
+  private baseCookieOptions(req?: Request): CookieOptions {
     return {
       httpOnly: true,
-      secure: this.isProduction(),
-      sameSite: 'strict',
+      secure: this.cookieSecure(req),
+      sameSite: this.cookieSameSite(req),
       path: '/api/auth',
     };
   }
@@ -63,15 +90,16 @@ export class AuthController {
     res: Response,
     token: string,
     expiresInMs: number,
+    req?: Request,
   ): void {
     res.cookie('refresh_token', token, {
-      ...this.baseCookieOptions(),
+      ...this.baseCookieOptions(req),
       maxAge: Math.max(0, expiresInMs),
     });
   }
 
-  private clearRefreshCookie(res: Response): void {
-    res.clearCookie('refresh_token', this.baseCookieOptions());
+  private clearRefreshCookie(res: Response, req?: Request): void {
+    res.clearCookie('refresh_token', this.baseCookieOptions(req));
   }
 
   private extractRefreshToken(req: Request): string | undefined {
@@ -102,6 +130,7 @@ export class AuthController {
       res,
       result.refreshToken,
       result.sessionExpiresAt - Date.now(),
+      req,
     );
 
     return {
@@ -134,6 +163,7 @@ export class AuthController {
       res,
       result.refreshToken,
       result.sessionExpiresAt - Date.now(),
+      req,
     );
 
     return {
@@ -165,6 +195,7 @@ export class AuthController {
       res,
       result.refreshToken,
       result.sessionExpiresAt - Date.now(),
+      req,
     );
 
     return { accessToken: result.accessToken };
@@ -189,7 +220,7 @@ export class AuthController {
       userAgent: req.headers['user-agent'],
     });
 
-    this.clearRefreshCookie(res);
+    this.clearRefreshCookie(res, req);
 
     return { message: 'Logged out successfully' };
   }
@@ -211,7 +242,7 @@ export class AuthController {
       userAgent: req.headers['user-agent'],
     });
 
-    this.clearRefreshCookie(res);
+    this.clearRefreshCookie(res, req);
 
     return { message: 'All sessions logged out' };
   }
@@ -248,6 +279,7 @@ export class AuthController {
       res,
       result.refreshToken,
       result.sessionExpiresAt - Date.now(),
+      req,
     );
 
     return {

@@ -178,6 +178,7 @@ their own `X-Request-ID` header which is echoed and used in logs.
 docker compose stop app
 ```
 
+
 On SIGTERM/SIGINT the application:
 
 - stops accepting new BullMQ jobs and lets current jobs finish where practical
@@ -195,6 +196,7 @@ On SIGTERM/SIGINT the application:
 ## 9. Reproduction & upgrade
 
 Migrate to new versions:
+
 
 ```bash
 # build new image

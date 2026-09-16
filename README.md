@@ -89,7 +89,7 @@ cp .env.example .env
 ```
 
 For production override at least:
-
+ 
 ```env
 NODE_ENV=production
 DATABASE_PASSWORD=change-me

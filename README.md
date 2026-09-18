@@ -141,6 +141,7 @@ docker compose up -d --build
 docker compose run --rm migrate
 ```
 
+
 The app listens on the published `PORT` (default `3000`) and is behind an
 internal Docker network shared only with Postgres and Redis. Postgres and Redis
 are **not** exposed to the host by default.
